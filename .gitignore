@@ -1,0 +1,27 @@
+# Audio files (too large for git)
+*.mp3
+*.wav
+*.flac
+*.ogg
+
+# MIDI output
+*.mid
+*.midi
+
+# JSON output (examples/ is tracked)
+*.json
+!examples/*.json
+
+# Python
+*.pyc
+__pycache__/
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+.venv/
+venv/
+
+# macOS
+.DS_Store

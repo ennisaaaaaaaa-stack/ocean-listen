@@ -1,0 +1,175 @@
+{
+  "source": "humpback whale song (NOAA)",
+  "duration_sec": 19,
+  "total_notes": 21,
+  "notes": [
+    {
+      "pitch": 49,
+      "note_name": "C#3",
+      "start": 1.254,
+      "end": 1.44,
+      "duration": 0.186,
+      "velocity": 43
+    },
+    {
+      "pitch": 47,
+      "note_name": "B2",
+      "start": 1.544,
+      "end": 1.683,
+      "duration": 0.139,
+      "velocity": 44
+    },
+    {
+      "pitch": 45,
+      "note_name": "A2",
+      "start": 1.73,
+      "end": 1.881,
+      "duration": 0.151,
+      "velocity": 52
+    },
+    {
+      "pitch": 44,
+      "note_name": "G#2",
+      "start": 1.904,
+      "end": 2.033,
+      "duration": 0.129,
+      "velocity": 65
+    },
+    {
+      "pitch": 42,
+      "note_name": "F#2",
+      "start": 2.103,
+      "end": 2.312,
+      "duration": 0.209,
+      "velocity": 59
+    },
+    {
+      "pitch": 49,
+      "note_name": "C#3",
+      "start": 3.833,
+      "end": 4.031,
+      "duration": 0.199,
+      "velocity": 51
+    },
+    {
+      "pitch": 47,
+      "note_name": "B2",
+      "start": 4.159,
+      "end": 4.368,
+      "duration": 0.209,
+      "velocity": 76
+    },
+    {
+      "pitch": 47,
+      "note_name": "B2",
+      "start": 7.55,
+      "end": 7.748,
+      "duration": 0.197,
+      "velocity": 64
+    },
+    {
+      "pitch": 46,
+      "note_name": "A#2",
+      "start": 7.748,
+      "end": 7.899,
+      "duration": 0.151,
+      "velocity": 66
+    },
+    {
+      "pitch": 45,
+      "note_name": "A2",
+      "start": 7.958,
+      "end": 8.109,
+      "duration": 0.151,
+      "velocity": 64
+    },
+    {
+      "pitch": 45,
+      "note_name": "A2",
+      "start": 8.121,
+      "end": 8.26,
+      "duration": 0.139,
+      "velocity": 57
+    },
+    {
+      "pitch": 44,
+      "note_name": "G#2",
+      "start": 8.271,
+      "end": 8.434,
+      "duration": 0.163,
+      "velocity": 52
+    },
+    {
+      "pitch": 69,
+      "note_name": "A4",
+      "start": 9.641,
+      "end": 9.932,
+      "duration": 0.29,
+      "velocity": 43
+    },
+    {
+      "pitch": 70,
+      "note_name": "A#4",
+      "start": 10.653,
+      "end": 11.059,
+      "duration": 0.406,
+      "velocity": 55
+    },
+    {
+      "pitch": 70,
+      "note_name": "A#4",
+      "start": 11.059,
+      "end": 11.245,
+      "duration": 0.186,
+      "velocity": 48
+    },
+    {
+      "pitch": 48,
+      "note_name": "C3",
+      "start": 13.696,
+      "end": 13.929,
+      "duration": 0.233,
+      "velocity": 46
+    },
+    {
+      "pitch": 48,
+      "note_name": "C3",
+      "start": 14.057,
+      "end": 14.196,
+      "duration": 0.139,
+      "velocity": 36
+    },
+    {
+      "pitch": 69,
+      "note_name": "A4",
+      "start": 15.613,
+      "end": 15.799,
+      "duration": 0.186,
+      "velocity": 52
+    },
+    {
+      "pitch": 68,
+      "note_name": "G#4",
+      "start": 15.962,
+      "end": 16.125,
+      "duration": 0.163,
+      "velocity": 41
+    },
+    {
+      "pitch": 69,
+      "note_name": "A4",
+      "start": 16.183,
+      "end": 16.613,
+      "duration": 0.43,
+      "velocity": 49
+    },
+    {
+      "pitch": 70,
+      "note_name": "A#4",
+      "start": 16.787,
+      "end": 17.019,
+      "duration": 0.232,
+      "velocity": 40
+    }
+  ]
+}
