@@ -1,0 +1,33 @@
+Ocean Listen / 听海 — Third-Party Notices
+==========================================
+
+This project incorporates code from the following projects:
+
+1. whale-listen by migratorywhale (MIT License)
+   https://github.com/migratorywhale/whale-listen
+
+   Incorporated components:
+   - MIDI note extraction via basic-pitch (whale_listen.py)
+   - Whisper lyrics transcription (added in whale-listen-lyrics fork)
+
+   Copyright (c) migratorywhale
+
+2. Tinggu 听骨 by SeithAsync (MIT License)
+   https://github.com/SeithAsync/Tinggu
+
+   Incorporated components:
+   - Shallow/deep analysis architecture (ears.py)
+   - BPM, key, energy, frequency band analysis (analyze_song.py)
+   - PANNs instrument recognition (analyze_song.py)
+   - Demucs stem separation (ears.py)
+   - Voice profile analysis (ears.py)
+   - NetEase lyrics integration (lyrics.py)
+   - Spectrogram visualization (analyze_song.py)
+
+   Copyright (c) SeithAsync
+
+   Which itself incorporates code from:
+   - eryu by sebastianevan200-stack (MIT License)
+     https://github.com/sebastianevan200-stack/eryu
+
+All incorporated code is used under the MIT License.

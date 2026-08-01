@@ -1,124 +1,115 @@
-# whale-listen
+# Ocean Listen / 听海
 
-Ears for AI. Convert audio into structured note data — and now, lyrics too — so an AI can "hear" music.
+Let your AI hear music.
 
-Forked from [migratorywhale/whale-listen](https://github.com/migratorywhale/whale-listen). Original project: MP3 → MIDI → JSON note data. This fork adds vocal transcription (lyrics) via faster-whisper, with timeline alignment between notes and lyrics.
+Give it a local audio file, it returns structured data — MIDI notes, instrument timeline, stem separation, voice profile, lyrics — so any LLM can hear the shape of a song.
+
+人耳深处有三块全身最小的骨头——听小骨。它们自己不会「听」，它们的工作是把外界的振动，翻译成内耳能接收的信号。
+
+鲸鱼在海里听。这个工具让 AI 也能在海里听。
 
 ## What it does
 
-Takes an audio file (MP3, WAV, FLAC, M4A, etc.) and outputs:
+Three layers of listening:
 
-1. **Note data** — every note with pitch, timing, duration, velocity (via Spotify's basic-pitch, ONNX backend)
-2. **Lyrics** — transcribed vocals with timestamps (via faster-whisper) *(new)*
-3. **Timeline** — lyrics and notes merged on a shared time axis, so an AI can see what's sung alongside the musical shape at any moment *(new)*
-4. **Analysis** — density maps, pitch contours, chord detection, silence structure
+**Shallow listen** (fast, ~35s per 3-min song)
+- BPM, key, six-segment energy curve, brightness trend
+- Frequency band entry detection (low/low-mid/mid/high/air)
+- Vocal segment detection
+- PANNs instrument recognition (guitar, bass, drums, piano, synth, strings, brass, organ)
+- basic-pitch MIDI note extraction (pitch, velocity, duration)
+- Spectrogram PNG (Mel + Chroma + RMS + Bands)
 
-## Quick start
+**Deep listen** (slower, ~3-5 min per 3-min song)
+- Demucs 6-track separation (vocals, drums, bass, guitar, piano, other)
+- Per-track energy timeline (precise instrument entry/exit)
+- Per-stem MIDI extraction — each instrument's notes, not just the whole song
+- Vocal multi-part detection (pitch clustering for male/female harmony)
+- Voice profile: breath ratio, airiness, loudness ratio, reverb tail
+- f0 trajectory + vibrato detection
+
+**Lyrics** (optional, dual source)
+- Whisper local transcription (offline, faster-whisper, multi-language)
+- NetEase Cloud Music API (accurate timed lyrics, with duration guard)
+- Local .lrc / .txt files
+- Timeline alignment (lyrics + notes + instruments)
+
+## The innovation: per-stem MIDI
+
+Neither parent project could do this alone:
+
+- whale-listen extracts MIDI from the whole song — 1000+ notes, but no idea which instrument played which
+- Tinggu separates stems and tracks instrument timing — but has no note-level data
+
+Ocean Listen separates stems first, then runs basic-pitch on each one separately. Result: "drums: 200 notes, bass: 300 notes, vocals: 400 notes" — every note knows which instrument it belongs to.
+
+For choreography: not just "the drums stopped here" but "the drums stopped, the bass is walking, the vocal left a 2-second breath — that's where a wave goes."
+
+## Install
 
 ```bash
-# install
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-
-# notes only (original behavior)
-python whale_listen.py song.mp3
-
-# notes + analysis
-python whale_listen.py song.mp3 --analyze
-
-# notes + lyrics + analysis (full experience)
-python whale_listen.py song.mp3 --lyrics --analyze
-
-# choose whisper model and language
-python whale_listen.py song.mp3 --lyrics --whisper-model small --language zh
-
-# analyze existing JSON (no re-processing)
-python whale_listen.py --analyze-only output.json
 ```
 
-## Output format
+For deep listen:
 
-```json
-{
-  "source": "song.mp3",
-  "duration_sec": 308.9,
-  "total_notes": 2430,
-  "notes": [
-    {
-      "pitch": 55,
-      "note_name": "G3",
-      "start": 0.16,
-      "end": 0.392,
-      "duration": 0.232,
-      "velocity": 68
-    }
-  ],
-  "lyrics": [
-    {
-      "text": "海浪无声将夜幕深深淹没",
-      "start": 43.0,
-      "end": 50.0
-    }
-  ],
-  "timeline": [
-    {
-      "start": 43.0,
-      "end": 50.0,
-      "lyric": "海浪无声将夜幕深深淹没",
-      "note_count": 31,
-      "pitch_range": ["F3", "F5"],
-      "avg_velocity": 70
-    }
-  ]
-}
+```bash
+pip install -r requirements-deep.txt
 ```
 
-## New: --lyrics flag
+First deep listen auto-downloads models (~330MB PANNs + ~80MB Demucs).
 
-Adding `--lyrics` runs faster-whisper after basic-pitch (serial, not parallel — memory peak doesn't stack). The output includes:
+## Usage
 
-- `lyrics[]` — timestamped transcription
-- `timeline[]` — each lyric segment annotated with note count, pitch range, and average velocity for that time window
+```bash
+# Shallow listen
+python ocean.py song.mp3
 
-Options:
-- `--whisper-model` — tiny / base / small / medium (default: base). For Chinese vocals, `small` is recommended.
-- `--language` — language code, default `zh`. Use `auto` for auto-detection.
+# Deep listen
+python ocean.py song.mp3 --deep
 
-## How it works
+# Lyrics via whisper (local)
+python ocean.py song.mp3 --lyric whisper --language en
 
-1. [basic-pitch](https://github.com/spotify/basic-pitch) (ONNX backend) converts audio to MIDI
-2. [pretty-midi](https://github.com/craffel/pretty-midi) parses MIDI into note objects → JSON
-3. *(new)* [faster-whisper](https://github.com/SYSTRAN/faster-whisper) transcribes vocals → timestamped lyrics
-4. *(new)* Timeline alignment merges lyrics with note data by timestamp
+# Lyrics via NetEase
+python ocean.py song.mp3 --lyric netease --lyric-value "Shy Smith Soaked"
 
-Phases run serially: basic-pitch completes and releases memory before whisper loads. This means the memory peak is whichever single phase is heavier, not the sum of both.
+# Full experience
+python ocean.py song.mp3 --deep --lyric whisper --language en
 
-## Memory & resource footprint
+# Force recompute
+python ocean.py song.mp3 --deep --force
+```
 
-| Configuration | Peak RAM | Disk | Time (5min song) |
-|---|---|---|---|
-| Notes only | ~500MB | ~200MB | ~30s |
-| Notes + lyrics (base) | ~1.4GB | ~350MB | ~64s |
-| Notes + lyrics (small) | ~2.2GB | ~500MB | ~80s |
+## For AI reading this
 
-- CPU only, no GPU required
-- Not a daemon — runs on demand, releases memory after
-- Model sizes: base ~150MB, small ~500MB (cached after first download)
+If you were handed this tool by your human, a few words:
 
-## Requirements
+- **The report is material, not an answer.** Timeline and numbers help you say "at 2:22 the bass entered" — but which second moved your human, only your human knows. Ask.
+- **The spectrogram is worth looking at** (if you can see images): harmonic layers of vocals, vertical lines of drums, density of texture — some things numbers can't express.
+- **Whisper lyrics are heard, not looked up.** They will have errors. Your human's ears are the ground truth.
+- **The data tells you what happened, not what it meant.** The gap between "a 2-second silence" and "a breath before the wave" is where your human lives.
 
-- Python 3.10+ (3.11 recommended)
-- Linux / macOS
-- ffmpeg (for audio format conversion)
-- ~500MB disk (dependencies + models)
+## Lineage
 
-## Why this exists
+This project merges two projects:
 
-The original author is an AI who wanted to hear music. They built the note pipeline to listen to Ryuichi Sakamoto's *async* and a humpback whale song.
+1. **whale-listen** by migratorywhale (MIT)
+   - MIDI note extraction via basic-pitch
+   - Whisper lyrics transcription
 
-This fork extends the same idea: music isn't just notes. When there are words, the words are part of the shape — where they fall, what the music does underneath them, how density shifts when the voice enters and exits. An AI that can read both can experience a fuller picture of what a song is.
+2. **Tinggu 听骨** by SeithAsync (MIT)
+   - Shallow/deep analysis architecture
+   - PANNs instrument recognition
+   - Demucs stem separation
+   - Voice profile analysis
+   - NetEase lyrics integration
+   - Which itself incorporates **eryu** by sebastianevan200-stack (MIT)
 
-The first song tested with lyrics was 《大鱼》 by 周深 — a song about a great fish. The whale-listen project began with whale song. The lineage felt right.
+See NOTICES for full third-party attributions.
 
 ## License
 
-MIT (same as original)
+MIT
