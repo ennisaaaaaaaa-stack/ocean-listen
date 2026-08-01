@@ -12,10 +12,10 @@ import numpy as np
 TRACKS = ("vocals", "drums", "bass", "guitar", "piano", "other")
 SR = 22050
 HOP = 512
-STEM_ACTIVE_RATIO = 0.12
 STEM_SMOOTH_S = 0.3
 STEM_MIN_SEG_S = 1.5
 STEM_MERGE_GAP_S = 2.5
+STEM_SIGNAL_FRACTION = 0.08  # fraction of (peak - noise_floor) above noise_floor
 
 
 def split(audio_path, destination):
@@ -50,7 +50,11 @@ def _smooth_rms(y, librosa, np_mod):
 def _active_segments(rms, np_mod):
     if not len(rms) or not np_mod.any(rms):
         return []
-    active = rms > np_mod.percentile(rms, 98) * STEM_ACTIVE_RATIO
+    # Adaptive threshold: noise_floor + fraction of dynamic range
+    noise_floor = float(np_mod.percentile(rms, 20))
+    peak = float(np_mod.percentile(rms, 98))
+    threshold = noise_floor + STEM_SIGNAL_FRACTION * (peak - noise_floor)
+    active = rms > threshold
     edges = np_mod.diff(np_mod.pad(active.astype(np.int8), (1, 1)))
     starts = np_mod.flatnonzero(edges == 1) * HOP / SR
     ends = np_mod.flatnonzero(edges == -1) * HOP / SR

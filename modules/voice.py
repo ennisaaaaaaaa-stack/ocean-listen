@@ -84,10 +84,11 @@ def profile(vocals_y, vocals_rms, vocal_segments, librosa, np_mod):
 
 
 def f0_analysis(vocals_y, sr=SR):
-    """Extract f0 trajectory and detect vibrato.
-    
+    """Extract f0 trajectory and detect vibrato via autocorrelation.
+
     Returns: f0_values, f0_times, vibrato_info
     Uses pyin for accurate f0 tracking.
+    Vibrato detected by autocorrelating detrended f0 contour segments.
     """
     import librosa
 
@@ -97,25 +98,101 @@ def f0_analysis(vocals_y, sr=SR):
     )
     times = librosa.times_like(f0, sr=sr, hop_length=HOP)
 
-    # Vibrato detection: look for periodic f0 oscillation
+    # Vibrato detection via autocorrelation on sustained voiced segments
     vibrato_info = {"detected": False, "average_rate": None, "average_depth_cents": None}
-    voiced_f0 = f0[voiced_flag]
-    if len(voiced_f0) > 50:
-        # Compute f0 derivative to find oscillation
-        f0_diff = np.diff(voiced_f0)
-        # Look for sign changes (oscillation)
-        sign_changes = np.sum(np.abs(np.diff(np.sign(f0_diff))) > 0)
-        # Rough vibrato rate estimate
-        voiced_duration = len(voiced_f0) * HOP / sr
-        if sign_changes > 4 and voiced_duration > 0.5:
-            vib_rate = (sign_changes / 2) / voiced_duration
-            if 3 < vib_rate < 12:  # vibrato is typically 4-8 Hz
-                vib_depth_cents = np.std(voiced_f0) / np.mean(voiced_f0) * 1200 * 0.5
-                vibrato_info = {
-                    "detected": True,
-                    "average_rate": round(vib_rate, 1),
-                    "average_depth_cents": round(float(vib_depth_cents), 1),
-                }
+
+    # Find continuous voiced segments (gap tolerance = 3 frames)
+    voiced_idx = np.flatnonzero(voiced_flag)
+    if len(voiced_idx) < 50:
+        return {
+            "f0_values": f0.tolist(),
+            "f0_times": times.tolist(),
+            "vibrato": vibrato_info,
+        }
+
+    # Split into sustained segments at gaps > 3 frames
+    gaps = np.diff(voiced_idx)
+    breaks = np.flatnonzero(gaps > 3)
+    seg_starts = np.concatenate([[voiced_idx[0]], voiced_idx[breaks + 1]])
+    seg_ends = np.concatenate([voiced_idx[breaks], [voiced_idx[-1]]])
+
+    min_seg_frames = int(0.3 * sr / HOP)  # min 0.3s sustained for vibrato
+    vib_rates = []
+    vib_depths = []
+
+    for s, e in zip(seg_starts, seg_ends):
+        seg_len = e - s + 1
+        if seg_len < min_seg_frames:
+            continue
+
+        seg_f0 = f0[s:e + 1].copy()
+        # Detrend: subtract moving average (window ~0.5s) to isolate oscillation
+        ma_win = max(int(0.5 * sr / HOP), 5)
+        if seg_len < ma_win * 2:
+            # Short segment: just subtract mean
+            seg_f0_detrended = seg_f0 - np.mean(seg_f0)
+        else:
+            # Moving average detrend
+            kernel = np.ones(ma_win) / ma_win
+            trend = np.convolve(seg_f0, kernel, mode='same')
+            seg_f0_detrended = seg_f0 - trend
+
+        # Autocorrelation
+        seg_centered = seg_f0_detrended - np.mean(seg_f0_detrended)
+        autocorr = np.correlate(seg_centered, seg_centered, mode='full')
+        autocorr = autocorr[len(autocorr) // 2:]  # right half
+        autocorr = autocorr / autocorr[0] if autocorr[0] > 0 else autocorr
+
+        # Look for first peak in 3-10 Hz range
+        frame_rate = sr / HOP  # frames per second
+        min_lag = int(frame_rate / 10)  # 10 Hz
+        max_lag = int(frame_rate / 3)   # 3 Hz
+        if max_lag >= len(autocorr):
+            max_lag = len(autocorr) - 1
+        if min_lag >= max_lag:
+            continue
+
+        search = autocorr[min_lag:max_lag + 1]
+        if len(search) < 2:
+            continue
+
+        # Find peaks (local maxima)
+        peaks = []
+        for i in range(1, len(search) - 1):
+            if search[i] > search[i - 1] and search[i] >= search[i + 1]:
+                peaks.append((search[i], i + min_lag))
+
+        if not peaks:
+            continue
+
+        # Best peak = highest autocorrelation
+        best_corr, best_lag = max(peaks, key=lambda p: p[0])
+
+        if best_corr < 0.15:  # too weak, not a real oscillation
+            continue
+
+        vib_rate = frame_rate / best_lag
+        if not (3 <= vib_rate <= 10):
+            continue
+
+        # Depth: peak-to-peak amplitude of the oscillation in cents
+        seg_mean_f0 = np.mean(seg_f0[seg_f0 > 0])
+        if seg_mean_f0 <= 0:
+            continue
+        # Amplitude = std of detrended f0 (half of peak-to-peak for sinusoid)
+        vib_amp_hz = np.std(seg_f0_detrended) * np.sqrt(2)  # peak deviation for sinusoid
+        vib_depth_cents = 1200 * np.log2(1 + vib_amp_hz / seg_mean_f0) if seg_mean_f0 > 0 else 0
+
+        vib_rates.append(vib_rate)
+        vib_depths.append(vib_depth_cents)
+
+    if vib_rates:
+        vibrato_info = {
+            "detected": True,
+            "average_rate": round(float(np.median(vib_rates)), 1),
+            "average_depth_cents": round(float(np.median(vib_depths)), 1),
+            "segment_count": len(vib_rates),
+        }
 
     return {
         "f0_values": f0.tolist(),
