@@ -11,9 +11,10 @@ A merger of:
 Usage:
   python ocean.py song.mp3                              # shallow listen
   python ocean.py song.mp3 --deep                       # + stem separation + voice
-  python ocean.py song.mp3 --lyric whisper --language en  # + whisper lyrics
-  python ocean.py song.mp3 --lyric "song artist"        # + netease lyrics
-  python ocean.py song.mp3 --deep --lyric whisper       # full experience
+  python ocean.py song.mp3 --lyric auto                     # best lyrics: netease→whisper
+  python ocean.py song.mp3 --lyric whisper --language en     # whisper only
+  python ocean.py song.mp3 --lyric "song artist"             # netease search
+  python ocean.py song.mp3 --deep --lyric auto               # full experience
 """
 import argparse
 import json
@@ -130,7 +131,10 @@ def run_deep(data, audio_path, cache_dir, force=False):
 
 
 def run_lyrics(data, audio_path, mode, value, language="auto", whisper_model="small"):
-    """Attach lyrics from whisper or netease."""
+    """Attach lyrics from whisper, netease, or auto (netease-first)."""
+    if mode == "auto":
+        return _run_lyrics_auto(data, audio_path, value, language, whisper_model)
+
     if mode == "whisper":
         print("\n=== Lyrics (whisper) ===")
         import modules.lyrics_whisper as lw
@@ -138,24 +142,114 @@ def run_lyrics(data, audio_path, mode, value, language="auto", whisper_model="sm
         data["lyrics"] = result
     elif mode == "netease":
         print("\n=== Lyrics (NetEase) ===")
-        import modules.lyrics_netease as ln
-        try:
-            result = ln.obtain_lyric(value, audio_path=audio_path)
-            data["lyrics"] = {
-                "source": result["source"],
-                "segments": [{"text": t, "start": s, "end": s + 5}
-                             for s, t in result.get("lines", [])],
-                "lrc": result.get("lrc", ""),
-                "language": "netease",
-            }
-        except Exception as e:
-            print(f"NetEase lyrics failed: {e}")
+        _attach_netease(data, audio_path, value, fallback_whisper=True,
+                        language=language, whisper_model=whisper_model)
 
     # Build aligned timeline
     if "lyrics" in data and data.get("notes"):
         data["timeline"] = _build_aligned_timeline(data["notes"], data["lyrics"])
 
     return data
+
+
+def _run_lyrics_auto(data, audio_path, search_term, language, whisper_model):
+    """Auto mode: try NetEase first, fall back to whisper."""
+    import modules.lyrics_netease as ln
+    import pathlib
+
+    # Build search term from filename if not provided
+    if not search_term:
+        stem = pathlib.Path(audio_path).stem
+        search_term = stem.replace("_", " ")
+
+    print(f"\n=== Lyrics (auto) ===")
+    print(f"Searching NetEase for '{search_term}'...")
+
+    audio_dur = ln._local_duration_s(str(audio_path))
+    best_id = None
+    best_lines = None
+    best_lrc = None
+    duration_mismatch = False
+
+    try:
+        candidates = ln._search(search_term)
+        if not candidates:
+            raise ln.LyricError(f"No results for '{search_term}'")
+
+        # Pick best duration match, but keep closest even if mismatch
+        hits = [c for c in candidates
+                if abs(c["duration_ms"] / 1000 - audio_dur) <= ln.DURATION_TOLERANCE_S]
+
+        if hits:
+            chosen = hits[0]
+        else:
+            # Duration mismatch — use top result but flag it
+            chosen = candidates[0]
+            duration_mismatch = True
+            orig_dur = chosen["duration_ms"] / 1000
+            print(f"  Duration mismatch: audio={audio_dur:.0f}s, "
+                  f"netease={orig_dur:.0f}s — using best match "
+                  f"(id {chosen['id']}), timestamps will be rescaled")
+
+        lrc, tlrc = ln._lyric(chosen["id"])
+        lines = ln.parse_lrc(lrc)
+
+        if not lines:
+            raise ln.LyricError(f"No timestamped lyrics for id {chosen['id']}")
+
+        best_id = chosen["id"]
+        best_lines = lines
+        best_lrc = lrc
+
+    except Exception as e:
+        print(f"  NetEase unavailable ({e}), falling back to whisper...")
+
+    if best_lines is not None:
+        # Rescale timestamps if duration mismatch
+        if duration_mismatch and best_lines:
+            orig_dur = max(best_lines[-1][0], 1)
+            scale = audio_dur / orig_dur if orig_dur < audio_dur else 1.0
+            best_lines = [[round(t * scale, 3), txt] for t, txt in best_lines]
+
+        data["lyrics"] = {
+            "source": f"netease:{best_id}",
+            "segments": [{"text": t, "start": s, "end": s + 5}
+                         for s, t in best_lines],
+            "lrc": best_lrc or "",
+            "language": "netease",
+        }
+        print(f"  Lyrics from NetEase (id {best_id}, "
+              f"{'rescaled' if duration_mismatch else 'exact match'})")
+    else:
+        # Fallback: whisper
+        print("  Falling back to whisper transcription...")
+        import modules.lyrics_whisper as lw
+        result = lw.transcribe(str(audio_path), model_size=whisper_model, language=language)
+        data["lyrics"] = result
+
+    return data
+
+
+def _attach_netease(data, audio_path, value, fallback_whisper=False,
+                    language="auto", whisper_model="small"):
+    """Attach NetEase lyrics with optional whisper fallback."""
+    import modules.lyrics_netease as ln
+    try:
+        result = ln.obtain_lyric(value, audio_path=audio_path)
+        data["lyrics"] = {
+            "source": result["source"],
+            "segments": [{"text": t, "start": s, "end": s + 5}
+                         for s, t in result.get("lines", [])],
+            "lrc": result.get("lrc", ""),
+            "language": "netease",
+        }
+    except Exception as e:
+        print(f"NetEase lyrics failed: {e}")
+        if fallback_whisper:
+            print("Falling back to whisper...")
+            import modules.lyrics_whisper as lw
+            data["lyrics"] = lw.transcribe(str(audio_path),
+                                           model_size=whisper_model, language=language)
 
 
 def _build_aligned_timeline(notes, lyrics):
@@ -194,9 +288,11 @@ def main():
     parser.add_argument("--deep", action="store_true",
                         help="deep listen: Demucs stem separation + voice profile + per-stem MIDI")
     parser.add_argument("--lyric", nargs="?", const="whisper", default=None,
-                        help="lyrics source: 'whisper' (local), 'netease' (search/id/url)")
+                        help="lyrics source: 'auto' (netease first→whisper fallback), "
+                             "'whisper' (local), 'netease' (search/id/url)")
     parser.add_argument("--lyric-value", default=None,
-                        help="value for netease lyrics: song ID, URL, or 'song artist' search")
+                        help="search term for auto/netease: song ID, URL, or 'song artist' "
+                             "(auto-mode defaults to filename)")
     parser.add_argument("--language", default="auto",
                         help="language for whisper (default: auto)")
     parser.add_argument("--whisper-model", default="small",
@@ -222,9 +318,12 @@ def main():
     # Determine lyric mode
     lyric_mode = None
     lyric_value = None
-    if args.lyric == "whisper":
+    if args.lyric == "auto":
+        lyric_mode = "auto"
+        lyric_value = args.lyric_value
+    elif args.lyric == "whisper":
         lyric_mode = "whisper"
-    elif args.lyric == "netease" or (args.lyric and args.lyric != "whisper"):
+    elif args.lyric == "netease" or (args.lyric and args.lyric not in ("whisper", "auto")):
         lyric_mode = "netease"
         lyric_value = args.lyric_value or args.lyric
 
