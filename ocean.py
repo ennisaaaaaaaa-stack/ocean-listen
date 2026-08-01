@@ -227,6 +227,10 @@ def _run_lyrics_auto(data, audio_path, search_term, language, whisper_model):
         result = lw.transcribe(str(audio_path), model_size=whisper_model, language=language)
         data["lyrics"] = result
 
+    # Build aligned timeline
+    if "lyrics" in data and data.get("notes"):
+        data["timeline"] = _build_aligned_timeline(data["notes"], data["lyrics"])
+
     return data
 
 

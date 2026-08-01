@@ -54850,5 +54850,353 @@
     ],
     "lrc": "[00:00.000] 作词 : Jeremy Lloyd/Samantha Lee Gongol\n[00:00.302] 作曲 : Jeremy Lloyd/Samantha Lee Gongol\n[00:00.605]Suit black as ink\n[00:03.543]I bet know your drink\n[00:06.723]Everything you pray for everything you play for\n[00:12.929]Baby turn around\n[00:16.83]Mind if I sit down\n[00:19.55]Everything you pray for\n[00:22.121]Everything you play for me\n[00:38.895]I la la la la love it\n[00:42.15]I la la la la love it\n[00:45.116]I la la la la love it love it love it love\n[00:49.823]You got a sexy sound\n[00:52.791]You want another round\n[00:55.817]I like the way you play boy\n[00:59.09]Tell me why you play boy\n[01:02.205]Does it make you feel\n[01:05.79]Like nothing else is real\n[01:08.182]I like the way you play boy\n[01:11.230]Show me why you play boy\n[01:28.175]I la la la la love it\n[01:31.153]I la la la la love it\n[01:34.325]I la la la la love it love it love it love it love\n[01:40.457]I la la la la love it\n[01:43.489]I la la la la love it\n[01:46.613]I la la la la love it love it love it love it love\n[02:17.704]I la la la la love it\n[02:20.404]I la la la la love it\n[02:23.563]I la la la la love it love it love it love it love\n[02:29.615]I la la la la love it\n[02:32.707]I la la la la love it\n[02:35.807]I la la la la love it love it love it love it love\n",
     "language": "netease"
-  }
+  },
+  "timeline": [
+    {
+      "start": 0.0,
+      "end": 5.0,
+      "lyric": "作词 : Jeremy Lloyd/Samantha Lee Gongol",
+      "note_count": 3,
+      "pitch_range": [
+        "G#1",
+        "G#1"
+      ],
+      "avg_velocity": 61
+    },
+    {
+      "start": 0.723,
+      "end": 5.723,
+      "lyric": "作曲 : Jeremy Lloyd/Samantha Lee Gongol",
+      "note_count": 4,
+      "pitch_range": [
+        "G#1",
+        "G#1"
+      ],
+      "avg_velocity": 61
+    },
+    {
+      "start": 1.449,
+      "end": 6.449,
+      "lyric": "Suit black as ink",
+      "note_count": 4,
+      "pitch_range": [
+        "G#1",
+        "G#1"
+      ],
+      "avg_velocity": 61
+    },
+    {
+      "start": 8.486,
+      "end": 13.486,
+      "lyric": "I bet know your drink",
+      "note_count": 4,
+      "pitch_range": [
+        "G#1",
+        "A#2"
+      ],
+      "avg_velocity": 57
+    },
+    {
+      "start": 16.103,
+      "end": 21.103,
+      "lyric": "Everything you pray for everything you play for",
+      "note_count": 5,
+      "pitch_range": [
+        "G#1",
+        "D#2"
+      ],
+      "avg_velocity": 59
+    },
+    {
+      "start": 30.968,
+      "end": 35.968,
+      "lyric": "Baby turn around",
+      "note_count": 6,
+      "pitch_range": [
+        "G#1",
+        "G4"
+      ],
+      "avg_velocity": 64
+    },
+    {
+      "start": 40.312,
+      "end": 45.312,
+      "lyric": "Mind if I sit down",
+      "note_count": 12,
+      "pitch_range": [
+        "G#1",
+        "G4"
+      ],
+      "avg_velocity": 54
+    },
+    {
+      "start": 46.828,
+      "end": 51.828,
+      "lyric": "Everything you pray for",
+      "note_count": 12,
+      "pitch_range": [
+        "G1",
+        "G4"
+      ],
+      "avg_velocity": 55
+    },
+    {
+      "start": 52.986,
+      "end": 57.986,
+      "lyric": "Everything you play for me",
+      "note_count": 9,
+      "pitch_range": [
+        "G#1",
+        "G4"
+      ],
+      "avg_velocity": 55
+    },
+    {
+      "start": 93.164,
+      "end": 98.164,
+      "lyric": "I la la la la love it",
+      "note_count": 11,
+      "pitch_range": [
+        "G#1",
+        "G4"
+      ],
+      "avg_velocity": 52
+    },
+    {
+      "start": 100.961,
+      "end": 105.961,
+      "lyric": "I la la la la love it",
+      "note_count": 10,
+      "pitch_range": [
+        "G#1",
+        "C5"
+      ],
+      "avg_velocity": 56
+    },
+    {
+      "start": 108.065,
+      "end": 113.065,
+      "lyric": "I la la la la love it love it love it love",
+      "note_count": 11,
+      "pitch_range": [
+        "G#1",
+        "C5"
+      ],
+      "avg_velocity": 52
+    },
+    {
+      "start": 119.34,
+      "end": 124.34,
+      "lyric": "You got a sexy sound",
+      "note_count": 11,
+      "pitch_range": [
+        "G#1",
+        "F5"
+      ],
+      "avg_velocity": 47
+    },
+    {
+      "start": 126.449,
+      "end": 131.449,
+      "lyric": "You want another round",
+      "note_count": 8,
+      "pitch_range": [
+        "G#1",
+        "C5"
+      ],
+      "avg_velocity": 54
+    },
+    {
+      "start": 133.697,
+      "end": 138.697,
+      "lyric": "I like the way you play boy",
+      "note_count": 7,
+      "pitch_range": [
+        "G#1",
+        "D5"
+      ],
+      "avg_velocity": 53
+    },
+    {
+      "start": 141.537,
+      "end": 146.537,
+      "lyric": "Tell me why you play boy",
+      "note_count": 9,
+      "pitch_range": [
+        "G#1",
+        "D#5"
+      ],
+      "avg_velocity": 52
+    },
+    {
+      "start": 148.998,
+      "end": 153.998,
+      "lyric": "Does it make you feel",
+      "note_count": 18,
+      "pitch_range": [
+        "G#1",
+        "G4"
+      ],
+      "avg_velocity": 55
+    },
+    {
+      "start": 157.585,
+      "end": 162.585,
+      "lyric": "Like nothing else is real",
+      "note_count": 13,
+      "pitch_range": [
+        "G#1",
+        "C5"
+      ],
+      "avg_velocity": 51
+    },
+    {
+      "start": 163.314,
+      "end": 168.314,
+      "lyric": "I like the way you play boy",
+      "note_count": 14,
+      "pitch_range": [
+        "G#1",
+        "G4"
+      ],
+      "avg_velocity": 50
+    },
+    {
+      "start": 170.615,
+      "end": 175.615,
+      "lyric": "Show me why you play boy",
+      "note_count": 11,
+      "pitch_range": [
+        "G#1",
+        "F5"
+      ],
+      "avg_velocity": 51
+    },
+    {
+      "start": 211.203,
+      "end": 216.203,
+      "lyric": "I la la la la love it",
+      "note_count": 19,
+      "pitch_range": [
+        "G#1",
+        "C5"
+      ],
+      "avg_velocity": 49
+    },
+    {
+      "start": 218.336,
+      "end": 223.336,
+      "lyric": "I la la la la love it",
+      "note_count": 10,
+      "pitch_range": [
+        "G#1",
+        "C5"
+      ],
+      "avg_velocity": 52
+    },
+    {
+      "start": 225.934,
+      "end": 230.934,
+      "lyric": "I la la la la love it love it love it love it love",
+      "note_count": 14,
+      "pitch_range": [
+        "G#1",
+        "D5"
+      ],
+      "avg_velocity": 56
+    },
+    {
+      "start": 240.622,
+      "end": 245.622,
+      "lyric": "I la la la la love it",
+      "note_count": 24,
+      "pitch_range": [
+        "G#1",
+        "G5"
+      ],
+      "avg_velocity": 55
+    },
+    {
+      "start": 247.884,
+      "end": 252.884,
+      "lyric": "I la la la la love it",
+      "note_count": 18,
+      "pitch_range": [
+        "G#1",
+        "G4"
+      ],
+      "avg_velocity": 55
+    },
+    {
+      "start": 255.367,
+      "end": 260.36699999999996,
+      "lyric": "I la la la la love it love it love it love it love",
+      "note_count": 19,
+      "pitch_range": [
+        "G#1",
+        "C5"
+      ],
+      "avg_velocity": 58
+    },
+    {
+      "start": 329.838,
+      "end": 334.838,
+      "lyric": "I la la la la love it",
+      "note_count": 9,
+      "pitch_range": [
+        "G#1",
+        "G4"
+      ],
+      "avg_velocity": 58
+    },
+    {
+      "start": 336.306,
+      "end": 341.306,
+      "lyric": "I la la la la love it",
+      "note_count": 10,
+      "pitch_range": [
+        "G#1",
+        "G4"
+      ],
+      "avg_velocity": 65
+    },
+    {
+      "start": 343.872,
+      "end": 348.872,
+      "lyric": "I la la la la love it love it love it love it love",
+      "note_count": 12,
+      "pitch_range": [
+        "G#1",
+        "G4"
+      ],
+      "avg_velocity": 66
+    },
+    {
+      "start": 358.368,
+      "end": 363.368,
+      "lyric": "I la la la la love it",
+      "note_count": 10,
+      "pitch_range": [
+        "G1",
+        "G4"
+      ],
+      "avg_velocity": 55
+    },
+    {
+      "start": 365.775,
+      "end": 370.775,
+      "lyric": "I la la la la love it",
+      "note_count": 19,
+      "pitch_range": [
+        "G1",
+        "G4"
+      ],
+      "avg_velocity": 57
+    },
+    {
+      "start": 373.2,
+      "end": 378.2,
+      "lyric": "I la la la la love it love it love it love it love"
+    }
+  ]
 }
