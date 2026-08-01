@@ -1,27 +1,12 @@
-# Audio files (too large for git)
+venv2/
+venv/
+__pycache__/
+*.pyc
+*.m4a
 *.mp3
 *.wav
 *.flac
-*.ogg
-
-# MIDI output
 *.mid
-*.midi
-
-# JSON output (examples/ is tracked)
-*.json
-!examples/*.json
-
-# Python
-*.pyc
-__pycache__/
-*.egg-info/
-dist/
-build/
-
-# Virtual environment
-.venv/
-venv/
-
-# macOS
-.DS_Store
+install.log
+requirements_fix.txt
+# keep json outputs — they're small and useful

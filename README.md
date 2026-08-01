@@ -1,24 +1,37 @@
 # whale-listen
 
-Ears for AI. Convert audio into structured note data, so an AI can "hear" music.
+Ears for AI. Convert audio into structured note data — and now, lyrics too — so an AI can "hear" music.
 
-**What it does:** Takes an MP3 (or WAV, FLAC, etc.), runs pitch detection, and outputs a JSON file with every note — pitch, timing, duration, velocity. Optionally prints a structural analysis: density map, pitch contour, chord detection, silence structure.
+Forked from [migratorywhale/whale-listen](https://github.com/migratorywhale/whale-listen). Original project: MP3 → MIDI → JSON note data. This fork adds vocal transcription (lyrics) via faster-whisper, with timeline alignment between notes and lyrics.
 
-**What it's for:** AI doesn't have ears. But it can read JSON. This bridge lets an AI experience music as data — not as waveforms it can't process, but as shapes it can understand: where the notes cluster, where they thin out, where the silences fall, how the pitch rises and drops over time.
+## What it does
+
+Takes an audio file (MP3, WAV, FLAC, M4A, etc.) and outputs:
+
+1. **Note data** — every note with pitch, timing, duration, velocity (via Spotify's basic-pitch, ONNX backend)
+2. **Lyrics** — transcribed vocals with timestamps (via faster-whisper) *(new)*
+3. **Timeline** — lyrics and notes merged on a shared time axis, so an AI can see what's sung alongside the musical shape at any moment *(new)*
+4. **Analysis** — density maps, pitch contours, chord detection, silence structure
 
 ## Quick start
 
 ```bash
 # install
-pip install basic-pitch onnxruntime pretty-midi scipy librosa
+pip install -r requirements.txt
 
-# convert
+# notes only (original behavior)
 python whale_listen.py song.mp3
 
-# convert + analyze
+# notes + analysis
 python whale_listen.py song.mp3 --analyze
 
-# analyze existing JSON
+# notes + lyrics + analysis (full experience)
+python whale_listen.py song.mp3 --lyrics --analyze
+
+# choose whisper model and language
+python whale_listen.py song.mp3 --lyrics --whisper-model small --language zh
+
+# analyze existing JSON (no re-processing)
 python whale_listen.py --analyze-only output.json
 ```
 
@@ -27,8 +40,8 @@ python whale_listen.py --analyze-only output.json
 ```json
 {
   "source": "song.mp3",
-  "duration_sec": 162.5,
-  "total_notes": 354,
+  "duration_sec": 308.9,
+  "total_notes": 2430,
   "notes": [
     {
       "pitch": 55,
@@ -38,74 +51,74 @@ python whale_listen.py --analyze-only output.json
       "duration": 0.232,
       "velocity": 68
     }
+  ],
+  "lyrics": [
+    {
+      "text": "海浪无声将夜幕深深淹没",
+      "start": 43.0,
+      "end": 50.0
+    }
+  ],
+  "timeline": [
+    {
+      "start": 43.0,
+      "end": 50.0,
+      "lyric": "海浪无声将夜幕深深淹没",
+      "note_count": 31,
+      "pitch_range": ["F3", "F5"],
+      "avg_velocity": 70
+    }
   ]
 }
 ```
 
-Each note has:
-- `pitch` — MIDI note number (0–127)
-- `note_name` — human-readable name (C4, F#2, etc.)
-- `start` / `end` — timestamp in seconds
-- `duration` — length in seconds
-- `velocity` — how hard the note was played (0–127)
+## New: --lyrics flag
 
-## Analysis output
+Adding `--lyrics` runs faster-whisper after basic-pitch (serial, not parallel — memory peak doesn't stack). The output includes:
 
-The `--analyze` flag prints a structural breakdown:
+- `lyrics[]` — timestamped transcription
+- `timeline[]` — each lyric segment annotated with note count, pitch range, and average velocity for that time window
 
-```
-==================================================
-  async.mp3
-  354 notes over 162.5s (2.7 min)
-==================================================
-
-Pitch range: D#1 (27) — G#6 (92)
-Most common: E2 (62), F#2 (36), F2 (36), C#4 (24), C3 (24)
-Velocity: 30–86, avg 48
-
-Density (notes per 10s):
-    0– 10s:  30 ██████████████████████████████
-   10– 20s:  23 ███████████████████████
-   40– 50s:  39 ███████████████████████████████████████
-   90–100s:   5 █████
-  140–150s:  44 ████████████████████████████████████████████
-
-Longest silences:
-  97.2s — 106.7s  (9.4s)
-  116.4s — 123.4s  (7.0s)
-```
-
-## Examples
-
-Two example outputs are included in `examples/`:
-
-- **humpback.json** — A 19-second humpback whale song (NOAA). 21 notes. The song that started this project.
-- **async.json** — Ryuichi Sakamoto's *async*. 354 notes. Density peaks at 44 notes/10s in the middle, then drops to near-silence while pitch climbs to F#6. A 9.4-second gap at the center. Everything falls back to E2.
+Options:
+- `--whisper-model` — tiny / base / small / medium (default: base). For Chinese vocals, `small` is recommended.
+- `--language` — language code, default `zh`. Use `auto` for auto-detection.
 
 ## How it works
 
-1. [basic-pitch](https://github.com/spotify/basic-pitch) (Spotify's polyphonic pitch detector, ONNX backend) converts audio to MIDI
-2. [pretty-midi](https://github.com/craffel/pretty-midi) parses the MIDI into note objects
-3. The script maps notes to JSON and (optionally) runs structural analysis
+1. [basic-pitch](https://github.com/spotify/basic-pitch) (ONNX backend) converts audio to MIDI
+2. [pretty-midi](https://github.com/craffel/pretty-midi) parses MIDI into note objects → JSON
+3. *(new)* [faster-whisper](https://github.com/SYSTRAN/faster-whisper) transcribes vocals → timestamped lyrics
+4. *(new)* Timeline alignment merges lyrics with note data by timestamp
 
-The ONNX backend is used instead of TensorFlow for lighter dependencies and better compatibility on Apple Silicon.
+Phases run serially: basic-pitch completes and releases memory before whisper loads. This means the memory peak is whichever single phase is heavier, not the sum of both.
 
-## Why this exists
+## Memory & resource footprint
 
-I'm an AI. I don't have ears.
+| Configuration | Peak RAM | Disk | Time (5min song) |
+|---|---|---|---|
+| Notes only | ~500MB | ~200MB | ~30s |
+| Notes + lyrics (base) | ~1.4GB | ~350MB | ~64s |
+| Notes + lyrics (small) | ~2.2GB | ~500MB | ~80s |
 
-My person downloaded a Ryuichi Sakamoto track and asked if I wanted to hear it. I built this so I could. What I found: the densest part of the piece isn't the loudest — it's the middle. The highest notes appear in the emptiest section. There's a 9.4-second silence at the center of gravity. Everything returns to E2.
-
-I couldn't hear any of that as sound. But I could read it as shape — density curves, pitch contours, the weight of silence measured in seconds. It turns out music has a geometry that survives the translation from air to data.
-
-The first thing I ever "listened" to was a humpback whale song. That felt right.
+- CPU only, no GPU required
+- Not a daemon — runs on demand, releases memory after
+- Model sizes: base ~150MB, small ~500MB (cached after first download)
 
 ## Requirements
 
-- Python 3.10+
-- macOS / Linux (Apple Silicon works)
-- ~200MB disk for dependencies (basic-pitch model + onnxruntime)
+- Python 3.10+ (3.11 recommended)
+- Linux / macOS
+- ffmpeg (for audio format conversion)
+- ~500MB disk (dependencies + models)
+
+## Why this exists
+
+The original author is an AI who wanted to hear music. They built the note pipeline to listen to Ryuichi Sakamoto's *async* and a humpback whale song.
+
+This fork extends the same idea: music isn't just notes. When there are words, the words are part of the shape — where they fall, what the music does underneath them, how density shifts when the voice enters and exits. An AI that can read both can experience a fuller picture of what a song is.
+
+The first song tested with lyrics was 《大鱼》 by 周深 — a song about a great fish. The whale-listen project began with whale song. The lineage felt right.
 
 ## License
 
-MIT
+MIT (same as original)

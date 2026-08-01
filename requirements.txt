@@ -1,0 +1,7 @@
+basic-pitch
+onnxruntime
+pretty-midi
+scipy
+librosa
+faster-whisper
+setuptools<81
