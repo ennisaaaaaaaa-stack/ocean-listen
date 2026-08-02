@@ -50,7 +50,7 @@ You can also force a mode: `--mode music`, `--mode voice`, etc.
   - `sustained` — stable pitch, high voiced ratio (held notes)
   - `melodic` — pitch varies (singing)
   - `speech` — flat pitch, medium density (talking)
-  - `non_vocal` — extreme pitch jumps (iqr > 150Hz: moans, gasps, shouts)
+  - `non_vocal` — extreme pitch jumps (iqr > 150Hz, indicating non-standard vocal sounds)
   - Uses adaptive boundaries (2s window, 0.5s step) with type smoothing and segment merging
 
 ### Lyrics (optional, dual source)
@@ -123,7 +123,7 @@ If you were handed this tool by your human, a few words:
 - **The spectrogram is worth looking at** (if you can see images): harmonic layers of vocals, vertical lines of drums, density of texture — some things numbers can't express.
 - **Whisper lyrics are heard, not looked up.** They will have errors. Your human's ears are the ground truth.
 - **The data tells you what happened, not what it meant.** The gap between "a 2-second silence" and "a breath before the wave" is where your human lives.
-- **Voice segments are textures, not labels.** A "non_vocal" segment might be a gasp of pain, a shout of joy, or something else entirely. The type tells you the sound's shape — your human tells you what it means.
+- **Voice segments are textures, not labels.** The type tells you the sound's shape — your human tells you what it means.
 
 ## Lineage
 
