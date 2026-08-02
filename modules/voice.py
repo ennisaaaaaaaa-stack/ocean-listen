@@ -654,6 +654,19 @@ def voice_texture_profile(segments, timbre=None):
 
     profile["texture_label"] = texture_label
 
+    # Include raw segment list for downstream consumers
+    profile["segments"] = [
+        {
+            "start": round(s["start"], 2),
+            "end": round(s["end"], 2),
+            "type": s["type"],
+            "median_f0": s.get("median_f0", 0),
+            "pitch_iqr": s.get("pitch_iqr", 0),
+            "voiced_ratio": round(s.get("voiced_ratio", 0), 2),
+        }
+        for s in segments
+    ]
+
     # --- enrich with timbre data if provided ---
     if timbre:
         profile["timbre"] = {
