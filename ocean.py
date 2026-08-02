@@ -174,6 +174,19 @@ def run_deep(data, audio_path, cache_dir, pipeline_config=None):
         except Exception as e:
             print(f"f0/timbre analysis failed: {e}")
 
+    # Per-note dynamics on full mix
+    if data.get("notes"):
+        import modules.dynamics as dyn_mod
+        y_full, sr_full = librosa.load(str(audio_path), sr=22050)
+        notes, phrase_dyn = dyn_mod.analyze_dynamics(data["notes"], y_full, sr=22050)
+        data["notes"] = notes
+        if phrase_dyn:
+            data["phraseDynamics"] = phrase_dyn
+            cresc = sum(1 for p in phrase_dyn if p["label"] == "crescendo")
+            decresc = sum(1 for p in phrase_dyn if p["label"] == "decrescendo")
+            sustained = sum(1 for p in phrase_dyn if p["label"] == "sustained")
+            print(f"  Dynamics: {cresc} crescendo, {decresc} decrescendo, {sustained} sustained phrases")
+
     data["deepVersion"] = 1
     return data
 
@@ -191,6 +204,19 @@ def _run_deep_no_demucs(data, audio_path, pipeline_config):
     if not vocal_segments:
         # Treat entire audio as one segment
         vocal_segments = [[0.0, round(duration, 1)]]
+
+    # Per-note dynamics (enrich existing notes with energy contour)
+    if data.get("notes"):
+        import modules.dynamics as dyn_mod
+        notes, phrase_dyn = dyn_mod.analyze_dynamics(data["notes"], y, sr=22050)
+        data["notes"] = notes
+        if phrase_dyn:
+            data["phraseDynamics"] = phrase_dyn
+            # Summary
+            cresc = sum(1 for p in phrase_dyn if p["label"] == "crescendo")
+            decresc = sum(1 for p in phrase_dyn if p["label"] == "decrescendo")
+            sustained = sum(1 for p in phrase_dyn if p["label"] == "sustained")
+            print(f"  Dynamics: {cresc} crescendo, {decresc} decrescendo, {sustained} sustained phrases")
 
     # Voice profile on original audio
     if pipeline_config["run_voice_profile"]:
