@@ -45,6 +45,12 @@ You can also force a mode: `--mode music`, `--mode voice`, etc.
 - Vocal multi-part detection (pitch clustering for male/female harmony)
 - Voice profile: breath ratio, airiness, loudness ratio, reverb tail
 - f0 trajectory + vibrato detection
+- **Voice texture profile** — two-axis fingerprint for any voice audio:
+  - Axis 1: pitch IQR (texture roughness — how much pitch jumps around)
+  - Axis 2: voiced_ratio (density — how continuously voiced)
+  - 5-level texture label: sparse / natural / dense / dynamic / intense
+  - Per-type breakdown with duration, median IQR, median density, median f0
+  - f0 tracking up to 1000Hz (catches extreme vocal sounds that 500Hz cap missed)
 - **Voice texture segmentation** — sliding-window analysis that breaks voice into typed segments:
   - `silence` — no voicing (breaths, pauses)
   - `sustained` — stable pitch, high voiced ratio (held notes)
