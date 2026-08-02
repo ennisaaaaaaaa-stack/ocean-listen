@@ -76,6 +76,15 @@ def classify(instruments_data, structure_data):
         reasoning = (f"Vocals dominate ({vocal_coverage:.0%}) with rhythmic backing "
                      f"(perc={perc_ratio:.2f})")
         conf_score = 0.8
+    elif has_percussion and not panns_instruments and speech_coverage > 0.2:
+        # Percussion present but PANNs found ONLY voice (speech/vocals), no instruments
+        # → percussion is from consonants/breathing, not drums
+        # This catches raw voice recordings that have "noisy" articulation
+        audio_type = "voice"
+        reasoning = (f"Voice-only detected (speech_cov={speech_coverage:.0%}), "
+                     f"percussion from articulation (perc={perc_ratio:.2f}), "
+                     f"no instruments found")
+        conf_score = 0.85
     elif has_percussion:
         # Has rhythmic transients → almost certainly music
         # PANNs can't see instruments in mixed audio, but structure says music

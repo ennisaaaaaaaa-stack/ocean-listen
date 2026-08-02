@@ -56,11 +56,22 @@ def print_shallow_report(data):
 
     # Instruments
     instruments = data.get("instruments", {})
-    if instruments:
+    display_instr = {k: v for k, v in instruments.items()
+                     if k != "_confidence" and isinstance(v, list) and v}
+    if display_instr:
         print(f"\n— Instruments detected —")
-        for inst, segs in sorted(instruments.items(), key=lambda x: x[1][0][0] if x[1] else 9999):
+        for inst, segs in sorted(display_instr.items(), key=lambda x: x[1][0][0] if x[1] else 9999):
             spans = ", ".join(f"{mmss(s)}-{mmss(e)}" for s, e in segs)
             print(f"  {inst}: {spans}")
+        conf = instruments.get("_confidence", {})
+        if conf:
+            parts = []
+            for k, v in conf.items():
+                if isinstance(v, dict):
+                    parts.append(f"{k}={v.get('avg_prob',0):.0%}")
+                else:
+                    parts.append(f"{k}={v:.0%}")
+            print(f"  (confidence: {', '.join(parts)})")
 
     # Notes summary
     notes = data.get("notes", [])
