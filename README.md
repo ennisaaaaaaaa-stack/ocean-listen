@@ -76,6 +76,25 @@ You can also force a mode: `--mode music`, `--mode voice`, etc.
   - Energy: RMS dynamic range in dB
   - Rhythm: voiced segment duration regularity (regular / irregular)
 
+### Per-note dynamics contour
+
+Every note gets a 7-field dynamic profile extracted directly from audio energy (RMS), not from MIDI velocity:
+
+- peak_rms, mean_rms — absolute energy of this note
+- attack_slope — how fast the note ramps up (sharp attack vs gradual swell)
+- peak_position — where the energy peak sits within the note (0 = at the start, 1 = at the end)
+- decay_rate — how quickly the note fades after peak
+- relative — z-score against all notes in the piece (this note is +1.5σ = much louder than average)
+- dynamic_label — pp / p / mp / mf / f / ff (based on the relative distribution)
+
+Phrase-level dynamics (5-second sliding window):
+
+- trend: crescendo / decrescendo / sustained
+- mean_energy per window
+- Detects long-range dynamic arcs (a 3-minute swell, a gradual fade-out)
+
+This module exists because basic-pitch velocity measures model confidence, not loudness. Empirically verified: velocity-energy correlation across tested pieces ranges from -0.088 to +0.003 — essentially zero. Audio RMS is the only reliable loudness signal.
+
 ### Lyrics (optional, triple source)
 
 - Whisper local transcription (offline, faster-whisper, multi-language)
@@ -167,6 +186,9 @@ This project merges two projects:
    - Voice profile analysis
    - NetEase lyrics integration
    - Which itself incorporates **eryu** by sebastianevan200-stack (MIT)
+
+3. **Reference project** by 盏 / Qizhan7
+   - Project documentation provided as design reference during development
 
 See NOTICES for full third-party attributions.
 
