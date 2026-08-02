@@ -665,3 +665,191 @@ def voice_texture_profile(segments, timbre=None):
         }
 
     return profile
+
+
+# ---------------------------------------------------------------------------
+# Speech analysis: rate, pausing, intonation, energy dynamics
+# ---------------------------------------------------------------------------
+
+def speech_analysis(f0_values, f0_times, segments, y=None, sr=SR):
+    """Analyze speech patterns from f0 trajectory and segmentation.
+
+    Computes speech-specific metrics that complement timbre and texture:
+
+    - speech_rate: estimated syllables/min (from voiced burst counting)
+    - pause_pattern: silence ratio, count, mean pause length
+    - intonation: f0 range and variability within speech segments
+    - energy: RMS dynamics (if audio provided)
+    - rhythm: regularity of voiced segment durations
+
+    Parameters
+    ----------
+    f0_values : list of float
+    f0_times : list of float
+    segments : list of dict
+        Output from segment_voice().
+    y : np.ndarray or None
+        Audio signal for energy analysis.
+    sr : int
+
+    Returns dict or None if insufficient speech content.
+    """
+    import numpy as np
+
+    if not segments:
+        return None
+
+    f0 = np.array(f0_values, dtype=float)
+    times = np.array(f0_times)
+    voiced_mask = np.isfinite(f0) & (f0 > 0)
+
+    # Classify segments into speech vs non-speech
+    speech_segs = [s for s in segments if s["type"] == "speech"]
+    silence_segs = [s for s in segments if s["type"] == "silence"]
+    all_voiced_segs = [s for s in segments if s["type"] in ("speech", "melodic", "sustained")]
+
+    total_dur = sum(s["end"] - s["start"] for s in segments)
+    speech_dur = sum(s["end"] - s["start"] for s in speech_segs)
+    silence_dur = sum(s["end"] - s["start"] for s in silence_segs)
+    voiced_dur = sum(s["end"] - s["start"] for s in all_voiced_segs)
+
+    if total_dur < 3 or voiced_dur < 1:
+        return None
+
+    # --- speech rate (approximation) ---
+    # Count voiced bursts within all voiced segments as pseudo-syllables.
+    # A burst = a contiguous run of voiced frames separated by < 3 unvoiced frames.
+    pseudo_syllables = 0
+    for seg in all_voiced_segs:
+        s_idx = np.searchsorted(times, seg["start"])
+        e_idx = np.searchsorted(times, seg["end"])
+        seg_voiced = voiced_mask[s_idx:e_idx]
+        if len(seg_voiced) == 0:
+            continue
+        # Count bursts (transitions from unvoiced to voiced)
+        in_burst = False
+        gap = 0
+        for v in seg_voiced:
+            if v:
+                if not in_burst:
+                    pseudo_syllables += 1
+                    in_burst = True
+                gap = 0
+            else:
+                gap += 1
+                if gap > 3:
+                    in_burst = False
+
+    speech_rate = round(pseudo_syllables / voiced_dur * 60) if voiced_dur > 0 else 0
+
+    # --- pause pattern ---
+    pause_count = len(silence_segs)
+    pause_ratio = round(silence_dur / total_dur, 3) if total_dur > 0 else 0
+    mean_pause = round(silence_dur / pause_count, 2) if pause_count > 0 else 0
+
+    # --- intonation within voiced segments ---
+    speech_f0 = []
+    for seg in all_voiced_segs:
+        s_idx = np.searchsorted(times, seg["start"])
+        e_idx = np.searchsorted(times, seg["end"])
+        seg_f0 = f0[s_idx:e_idx]
+        seg_voiced = seg_f0[seg_f0 > 0]
+        speech_f0.extend(seg_voiced.tolist())
+
+    if speech_f0:
+        sf0 = np.array(speech_f0)
+        f0_p10 = float(np.percentile(sf0, 10))
+        f0_p90 = float(np.percentile(sf0, 90))
+        f0_range = round(f0_p90 - f0_p10)
+        f0_median = float(np.median(sf0))
+        f0_cv = round(float(np.std(sf0) / f0_median), 3) if f0_median > 0 else 0
+        # Convert range to semitones for musical context
+        f0_range_st = round(12 * np.log2(f0_p90 / f0_p10), 1) if f0_p10 > 0 else 0
+    else:
+        f0_range = f0_median = f0_cv = f0_range_st = 0
+
+    # --- energy dynamics ---
+    energy = None
+    if y is not None:
+        import librosa
+        rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=HOP)[0]
+        rms_times = librosa.times_like(rms, sr=sr, hop_length=HOP)
+        # Get RMS in voiced segments only
+        speech_rms = []
+        for seg in all_voiced_segs:
+            s_idx = np.searchsorted(rms_times, seg["start"])
+            e_idx = np.searchsorted(rms_times, seg["end"])
+            speech_rms.extend(rms[s_idx:e_idx].tolist())
+        if speech_rms:
+            sr_arr = np.array(speech_rms)
+            energy = {
+                "median_rms": round(float(np.median(sr_arr)), 5),
+                "p10_rms": round(float(np.percentile(sr_arr, 10)), 5),
+                "p90_rms": round(float(np.percentile(sr_arr, 90)), 5),
+                "dynamic_range_db": round(20 * np.log10(
+                    np.percentile(sr_arr, 90) / max(np.percentile(sr_arr, 10), 1e-8)
+                ), 1),
+            }
+
+    # --- rhythm regularity ---
+    voiced_durations = [s["end"] - s["start"] for s in all_voiced_segs]
+    if len(voiced_durations) > 2:
+        vd = np.array(voiced_durations)
+        rhythm_cv = round(float(np.std(vd) / np.mean(vd)), 3) if np.mean(vd) > 0 else 0
+    else:
+        rhythm_cv = 0
+
+    # --- overall labels ---
+    if speech_rate > 200:
+        rate_label = "fast"
+    elif speech_rate > 100:
+        rate_label = "moderate"
+    elif speech_rate > 0:
+        rate_label = "measured"
+    else:
+        rate_label = "none"
+
+    if pause_ratio > 0.3:
+        pause_label = "frequent_pauses"
+    elif pause_ratio > 0.1:
+        pause_label = "natural_pauses"
+    else:
+        pause_label = "continuous"
+
+    if f0_range_st > 8:
+        intonation_label = "expressive"
+    elif f0_range_st > 3:
+        intonation_label = "varied"
+    elif f0_range_st > 0:
+        intonation_label = "monotone"
+    else:
+        intonation_label = "flat"
+
+    return {
+        "speech_rate_syllables_per_min": speech_rate,
+        "rate_label": rate_label,
+        "pause": {
+            "count": pause_count,
+            "ratio": pause_ratio,
+            "mean_duration_s": mean_pause,
+            "label": pause_label,
+        },
+        "intonation": {
+            "f0_median_hz": round(f0_median),
+            "f0_range_hz": f0_range,
+            "f0_range_semitones": f0_range_st,
+            "f0_cv": f0_cv,
+            "label": intonation_label,
+        },
+        "energy": energy,
+        "rhythm": {
+            "voiced_segment_cv": rhythm_cv,
+            "label": "regular" if rhythm_cv < 0.5 else "irregular",
+        },
+        "content_breakdown": {
+            "speech_pct": round(speech_dur / total_dur * 100) if total_dur else 0,
+            "silence_pct": round(silence_dur / total_dur * 100) if total_dur else 0,
+            "voiced_pct": round(voiced_dur / total_dur * 100) if total_dur else 0,
+            "total_duration_s": round(total_dur, 1),
+        },
+    }

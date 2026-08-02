@@ -138,8 +138,41 @@ def run_deep(data, audio_path, cache_dir, pipeline_config=None):
             f0_data = voice_mod.f0_analysis(vocals_y, sr=22050)
             data["vibrato"] = f0_data["vibrato"]
             data["f0Data"] = {"times": f0_data["f0_times"], "values": f0_data["f0_values"]}
+
+            # Voice segmentation
+            segments = None
+            if pipeline_config.get("run_segment"):
+                print("Segmenting voice...")
+                segments = voice_mod.segment_voice(
+                    f0_data["f0_values"], f0_data["f0_times"], sr=22050)
+                if segments:
+                    data["voiceSegments"] = segments
+
+            # Timbre analysis
+            timbre = None
+            if pipeline_config.get("run_timbre"):
+                print("Analyzing voice timbre...")
+                timbre = voice_mod.voice_timbre_analysis(vocals_y, sr=22050)
+                if timbre:
+                    data["voiceTimbre"] = timbre
+
+            # Texture profile
+            if segments:
+                texture = voice_mod.voice_texture_profile(segments, timbre)
+                if texture:
+                    data["voiceTexture"] = texture
+
+            # Speech analysis
+            if pipeline_config.get("run_speech") and segments:
+                print("Analyzing speech patterns...")
+                speech = voice_mod.speech_analysis(
+                    f0_data["f0_values"], f0_data["f0_times"],
+                    segments, y=vocals_y, sr=22050)
+                if speech:
+                    data["speechAnalysis"] = speech
+
         except Exception as e:
-            print(f"f0 analysis failed: {e}")
+            print(f"f0/timbre analysis failed: {e}")
 
     data["deepVersion"] = 1
     return data
@@ -169,6 +202,7 @@ def _run_deep_no_demucs(data, audio_path, pipeline_config):
             data["voiceProfile"] = vp
 
     # f0 trajectory (intonation for speech, pitch for singing)
+    segments = None
     if pipeline_config["run_f0"]:
         try:
             import modules.voice as voice_mod
@@ -176,8 +210,39 @@ def _run_deep_no_demucs(data, audio_path, pipeline_config):
             f0_data = voice_mod.f0_analysis(y, sr=22050)
             data["vibrato"] = f0_data["vibrato"]
             data["f0Data"] = {"times": f0_data["f0_times"], "values": f0_data["f0_values"]}
+
+            # Voice segmentation
+            if pipeline_config.get("run_segment"):
+                print("Segmenting voice...")
+                segments = voice_mod.segment_voice(
+                    f0_data["f0_values"], f0_data["f0_times"], sr=22050)
+                if segments:
+                    data["voiceSegments"] = segments
+
+            # Timbre analysis
+            timbre = None
+            if pipeline_config.get("run_timbre"):
+                print("Analyzing voice timbre...")
+                timbre = voice_mod.voice_timbre_analysis(y, sr=sr)
+                if timbre:
+                    data["voiceTimbre"] = timbre
+
+            # Texture profile (combines segments + timbre)
+            if pipeline_config.get("run_segment") and segments:
+                texture = voice_mod.voice_texture_profile(segments, timbre)
+                if texture:
+                    data["voiceTexture"] = texture
+
+            # Speech analysis
+            if pipeline_config.get("run_speech") and segments:
+                print("Analyzing speech patterns...")
+                speech = voice_mod.speech_analysis(
+                    f0_data["f0_values"], f0_data["f0_times"], segments, y=y, sr=sr)
+                if speech:
+                    data["speechAnalysis"] = speech
+
         except Exception as e:
-            print(f"f0 analysis failed: {e}")
+            print(f"f0/timbre analysis failed: {e}")
 
     data["deepVersion"] = 1
     return data

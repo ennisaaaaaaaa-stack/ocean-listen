@@ -151,6 +151,8 @@ def get_pipeline_config(audio_type):
             "run_basic_pitch": True,
             "run_voice_profile": True,
             "run_f0": True,
+            "run_timbre": True,
+            "run_segment": True,
             "description": "Full music analysis: 6-track separation + per-stem MIDI",
         },
         "solo": {
@@ -169,7 +171,10 @@ def get_pipeline_config(audio_type):
             "run_basic_pitch": False,
             "run_voice_profile": True,
             "run_f0": True,
-            "description": "Voice analysis: intonation + voice profile + non-vocal sounds",
+            "run_timbre": True,
+            "run_segment": True,
+            "run_speech": True,
+            "description": "Voice analysis: timbre + intonation + segmentation + texture",
         },
         "mixed": {
             "run_demucs": True,
@@ -178,6 +183,8 @@ def get_pipeline_config(audio_type):
             "run_basic_pitch": True,
             "run_voice_profile": True,
             "run_f0": True,
+            "run_timbre": True,
+            "run_segment": True,
             "description": "Mixed: vocal/accompaniment split + voice analysis",
         },
     }
