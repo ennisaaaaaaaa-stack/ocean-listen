@@ -357,20 +357,236 @@ def segment_voice(f0_values, f0_times, sr=SR, hop=HOP):
 
 
 # ---------------------------------------------------------------------------
-# Voice texture profile: two-axis fingerprint
+# Voice timbre analysis: spectral shape + voice quality (dimension 2)
 # ---------------------------------------------------------------------------
 
-def voice_texture_profile(segments):
-    """Compute a two-dimensional voice fingerprint from segments.
+# Calibration data (2026-08-02, 6 samples across 3 controlled experiments):
+#
+#   Metric      relaxed  loud   lowOct  highOct  test1  nonvocal  柳知萧  青年音
+#   f0            232     320    281     479      256    454       268     117
+#   centroid     2020    3066   1659    2249     1510   2332      2184    2225
+#   HNR           16.2    12.1   17.8    19.7     17.0   13.0      14.8     7.8
+#   jitter       0.007   0.005  0.005   0.002    0.005  0.006     0.007   0.017
+#   shimmer      0.090   0.116  0.084   0.063    0.106  0.142     0.109   0.192
+#   F1            627     846    532     554      510    638       747     589
+#
+# Key findings:
+#   centroid: warm <1800 / neutral 1800-2200 / bright 2200-2800 / piercing >2800
+#   HNR:      clean >15 / natural 12-15 / raspy 9-12 / rough <9
+#   F1:       closed <560 / relaxed 560-700 / open 700-850 / wide >850
+#   jitter:   stable <0.008 / slight 0.008-0.012 / unstable >0.012
+#   shimmer:  smooth <0.10 / natural 0.10-0.14 / rough >0.14
+
+_BRIGHTNESS_WARM = 1800
+_BRIGHTNESS_BRIGHT = 2200
+_BRIGHTNESS_PIERCING = 2800
+_HNR_CLEAN = 15.0
+_HNR_RASPY = 12.0
+_HNR_ROUGH = 9.0
+_F1_CLOSED = 560
+_F1_OPEN = 700
+_F1_WIDE = 850
+_JITTER_STABLE = 0.008
+_JITTER_UNSTABLE = 0.012
+_SHIMMER_SMOOTH = 0.10
+_SHIMMER_ROUGH = 0.14
+
+
+def _brightness_label(centroid):
+    if centroid < _BRIGHTNESS_WARM:
+        return "warm"
+    if centroid < _BRIGHTNESS_BRIGHT:
+        return "neutral"
+    if centroid < _BRIGHTNESS_PIERCING:
+        return "bright"
+    return "piercing"
+
+
+def _cleanness_label(hnr):
+    if hnr >= _HNR_CLEAN:
+        return "clean"
+    if hnr >= _HNR_RASPY:
+        return "natural"
+    if hnr >= _HNR_ROUGH:
+        return "raspy"
+    return "rough"
+
+
+def _openness_label(f1):
+    if f1 < _F1_CLOSED:
+        return "closed"
+    if f1 < _F1_OPEN:
+        return "relaxed"
+    if f1 < _F1_WIDE:
+        return "open"
+    return "wide"
+
+
+def _stability_label(jitter, shimmer):
+    score = 0
+    if jitter > _JITTER_UNSTABLE:
+        score += 2
+    elif jitter > _JITTER_STABLE:
+        score += 1
+    if shimmer > _SHIMMER_ROUGH:
+        score += 2
+    elif shimmer > _SHIMMER_SMOOTH:
+        score += 1
+    if score <= 1:
+        return "stable"
+    if score <= 2:
+        return "slight"
+    return "unstable"
+
+
+def voice_timbre_analysis(y, sr=SR):
+    """Extract spectral and voice-quality features (dimension 2 of voice).
+
+    Combines librosa spectral features with parselmouth (Praat) voice
+    quality measures.  Requires praat-parselmouth.
+
+    Parameters
+    ----------
+    y : np.ndarray
+        Mono audio signal (float).
+    sr : int
+        Sample rate.
+
+    Returns
+    -------
+    dict with keys:
+        spectral   -- {centroid, rolloff, flatness} in Hz (or ratio)
+        formants   -- {F1, F2, F3} median values in Hz
+        voice_quality -- {jitter, shimmer, hnr}
+        pitch      -- {f0_median}
+        labels     -- {brightness, cleanness, openness, stability}
+        timbre_string -- human-readable summary
+    Returns None if audio too short or parselmouth unavailable.
+    """
+    duration = len(y) / sr
+    if duration < 0.3:
+        return None
+
+    try:
+        import parselmouth
+        from parselmouth.praat import call
+    except ImportError:
+        return None
+
+    import librosa
+
+    y32 = y.astype(np.float32)
+    snd = parselmouth.Sound(y32, sampling_frequency=sr)
+
+    # --- spectral shape (librosa) ---
+    cent = librosa.feature.spectral_centroid(y=y, sr=sr)
+    rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr, roll_percent=0.85)
+    flatness = librosa.feature.spectral_flatness(y=y)
+
+    centroid = float(np.median(cent))
+    rolloff_val = float(np.median(rolloff))
+    flatness_val = float(np.median(flatness))
+
+    # --- formants (parselmouth / Praat) ---
+    formant = snd.to_formant_burg(0.025, 5, 5000, 0.025, 50)
+    f_vals = {1: [], 2: [], 3: []}
+    n_samples = int(duration / 0.05)
+    for i in range(n_samples):
+        t = i * 0.05
+        for n in (1, 2, 3):
+            try:
+                v = formant.get_value_at_time(n, t)
+                if v and v > 0:
+                    f_vals[n].append(v)
+            except Exception:
+                pass
+    formants = {}
+    for n in (1, 2, 3):
+        formants[f"F{n}"] = int(np.median(f_vals[n])) if f_vals[n] else 0
+
+    # --- pitch + jitter/shimmer (parselmouth) ---
+    pitch = snd.to_pitch(0.025, 60, 1000)
+    pp = call(pitch, "To PointProcess")
+    try:
+        jitter = call(pp, "Get jitter (local)", 0, 0, 0.0001, 0.02, 1.3)
+    except Exception:
+        jitter = 0.0
+    try:
+        shimmer = call([snd, pp], "Get shimmer (local)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
+    except Exception:
+        shimmer = 0.0
+
+    # --- HNR (parselmouth) ---
+    harmonicity = snd.to_harmonicity_cc(0.01, 75, 0.1, 1.0)
+    hnr_arr = np.array(harmonicity.values).flatten()
+    hnr_vals = hnr_arr[hnr_arr > -200]
+    hnr = float(np.mean(hnr_vals)) if len(hnr_vals) > 0 else 0.0
+
+    # --- f0 median ---
+    pitch_freq = pitch.selected_array["frequency"]
+    voiced_f0 = pitch_freq[pitch_freq > 0]
+    f0_med = float(np.median(voiced_f0)) if len(voiced_f0) else 0.0
+
+    # --- labels ---
+    brightness = _brightness_label(centroid)
+    cleanness = _cleanness_label(hnr)
+    openness = _openness_label(formants["F1"])
+    stability = _stability_label(jitter, shimmer)
+
+    return {
+        "spectral": {
+            "centroid_hz": round(centroid),
+            "rolloff_hz": round(rolloff_val),
+            "flatness": round(flatness_val, 4),
+        },
+        "formants": {
+            "F1": formants["F1"],
+            "F2": formants["F2"],
+            "F3": formants["F3"],
+        },
+        "voice_quality": {
+            "jitter": round(float(jitter), 4),
+            "shimmer": round(float(shimmer), 4),
+            "hnr_db": round(hnr, 1),
+        },
+        "pitch": {
+            "f0_median": round(f0_med),
+        },
+        "labels": {
+            "brightness": brightness,
+            "cleanness": cleanness,
+            "openness": openness,
+            "stability": stability,
+        },
+        "timbre_string": f"{brightness} / {cleanness} / {openness} / {stability}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Voice texture profile: multi-axis fingerprint
+# ---------------------------------------------------------------------------
+
+def voice_texture_profile(segments, timbre=None):
+    """Compute a multi-dimensional voice fingerprint from segments.
 
     Axis 1: pitch_iqr — texture roughness (how much pitch jumps around)
     Axis 2: voiced_ratio — density (how continuously voiced the audio is)
+    Axis 3 (if timbre provided): brightness — spectral centroid warm/piercing
+    Axis 4 (if timbre provided): cleanness — HNR-based voice quality
 
     Together they form a "texture map" where different voice types
     occupy distinct regions:
         - Pure speech: low iqr (20-40), low-mid density (0.3-0.4)
         - Singing: mid iqr (40-80), high density (0.5-0.8)
         - Extreme sounds: very high iqr (150-400+), variable density
+
+    Parameters
+    ----------
+    segments : list of dict
+        Output from segment_voice().
+    timbre : dict or None
+        Output from voice_timbre_analysis().  If provided, enriches the
+        profile with spectral and voice-quality data.
 
     Returns a summary dict with per-type and overall statistics.
     """
@@ -437,5 +653,15 @@ def voice_texture_profile(segments):
         texture_label = "sparse"
 
     profile["texture_label"] = texture_label
+
+    # --- enrich with timbre data if provided ---
+    if timbre:
+        profile["timbre"] = {
+            "spectral": timbre["spectral"],
+            "formants": timbre["formants"],
+            "voice_quality": timbre["voice_quality"],
+            "labels": timbre["labels"],
+            "timbre_string": timbre["timbre_string"],
+        }
 
     return profile
