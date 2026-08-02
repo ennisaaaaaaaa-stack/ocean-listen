@@ -93,7 +93,7 @@ def f0_analysis(vocals_y, sr=SR):
     import librosa
 
     f0, voiced_flag, voiced_probs = librosa.pyin(
-        vocals_y, fmin=60, fmax=500, sr=sr,
+        vocals_y, fmin=60, fmax=1000, sr=sr,
         hop_length=HOP
     )
     times = librosa.times_like(f0, sr=sr, hop_length=HOP)
@@ -354,3 +354,88 @@ def segment_voice(f0_values, f0_times, sr=SR, hop=HOP):
                 merged.append(seg)
 
     return merged
+
+
+# ---------------------------------------------------------------------------
+# Voice texture profile: two-axis fingerprint
+# ---------------------------------------------------------------------------
+
+def voice_texture_profile(segments):
+    """Compute a two-dimensional voice fingerprint from segments.
+
+    Axis 1: pitch_iqr — texture roughness (how much pitch jumps around)
+    Axis 2: voiced_ratio — density (how continuously voiced the audio is)
+
+    Together they form a "texture map" where different voice types
+    occupy distinct regions:
+        - Pure speech: low iqr (20-40), low-mid density (0.3-0.4)
+        - Singing: mid iqr (40-80), high density (0.5-0.8)
+        - Extreme sounds: very high iqr (150-400+), variable density
+
+    Returns a summary dict with per-type and overall statistics.
+    """
+    if not segments:
+        return None
+
+    # Overall stats across all segments (weighted by duration)
+    total_dur = sum(s["end"] - s["start"] for s in segments)
+
+    all_iqr = []
+    all_vr = []
+    for s in segments:
+        dur = s["end"] - s["start"]
+        weight = max(1, int(dur * 10))  # weight by 100ms units
+        all_iqr.extend([s.get("pitch_iqr", 0)] * weight)
+        all_vr.extend([s.get("voiced_ratio", 0)] * weight)
+
+    import numpy as np
+
+    profile = {
+        "overall": {
+            "median_iqr": int(np.median(all_iqr)),
+            "p90_iqr": int(np.percentile(all_iqr, 90)),
+            "median_voiced_ratio": round(float(np.median(all_vr)), 2),
+            "mean_voiced_ratio": round(float(np.mean(all_vr)), 2),
+            "duration_s": round(total_dur, 1),
+        },
+        "by_type": {},
+    }
+
+    # Per-type breakdown
+    type_names = ["melodic", "speech", "sustained", "non_vocal", "silence"]
+    for t in type_names:
+        tsegs = [s for s in segments if s["type"] == t]
+        if not tsegs:
+            continue
+        t_dur = sum(s["end"] - s["start"] for s in tsegs)
+        t_iqr = [s.get("pitch_iqr", 0) for s in tsegs]
+        t_vr = [s.get("voiced_ratio", 0) for s in tsegs]
+        t_f0 = [s.get("median_f0", 0) for s in tsegs if s.get("median_f0", 0) > 0]
+
+        profile["by_type"][t] = {
+            "segments": len(tsegs),
+            "duration_s": round(t_dur, 1),
+            "duration_pct": round(t_dur / total_dur * 100) if total_dur else 0,
+            "median_iqr": int(np.median(t_iqr)),
+            "median_voiced_ratio": round(float(np.median(t_vr)), 2),
+            "median_f0": int(np.median(t_f0)) if t_f0 else 0,
+        }
+
+    # Texture classification (simple quadrant)
+    med_iqr = profile["overall"]["median_iqr"]
+    med_vr = profile["overall"]["median_voiced_ratio"]
+
+    if med_iqr > 100:
+        texture_label = "intense"
+    elif med_iqr > 50:
+        texture_label = "dynamic"
+    elif med_vr > 0.5:
+        texture_label = "dense"
+    elif med_vr > 0.25:
+        texture_label = "natural"
+    else:
+        texture_label = "sparse"
+
+    profile["texture_label"] = texture_label
+
+    return profile
