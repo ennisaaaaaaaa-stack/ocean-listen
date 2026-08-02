@@ -29,6 +29,12 @@ def print_shallow_report(data):
     print(f"  Duration: {round(duration)}s | BPM: {bpm} | Key: {key}")
     print(f"{'=' * 60}")
 
+    # Classification
+    cls = data.get("classification")
+    if cls:
+        print(f"\n  Type: {cls['type'].upper()} (confidence: {cls['confidence']})")
+        print(f"  {cls['reasoning']}")
+
     # Energy curve
     segments = data.get("segments", [])
     if segments:

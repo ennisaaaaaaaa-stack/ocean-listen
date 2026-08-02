@@ -74,53 +74,106 @@ def run_shallow(audio_path, cache_dir, force=False):
     return data
 
 
-def run_deep(data, audio_path, cache_dir, force=False):
-    """Deep listen: stem separation + per-stem notes + voice profile."""
-    print("\n=== Deep listen ===")
+def run_deep(data, audio_path, cache_dir, pipeline_config=None):
+    """Deep listen: mode-aware pipeline.
 
-    stems_dir = cache_dir / "stems"
+    pipeline_config comes from classifier.get_pipeline_config().
+    If None, defaults to full music mode (backward compat).
+    """
+    if pipeline_config is None:
+        from modules.classifier import get_pipeline_config
+        pipeline_config = get_pipeline_config("music")
 
-    # Demucs separation
-    import modules.stems as stems_mod
-    print("Separating stems (Demucs 6-track)...")
-    stems_mod.split(audio_path, stems_dir)
+    audio_type = pipeline_config.get("_type", "music")
+    print(f"\n=== Deep listen [{audio_type}] ===")
+    print(f"  Pipeline: {pipeline_config['description']}")
 
-    # Per-track timeline
     import librosa
     import numpy as np
+
+    if not pipeline_config["run_demucs"]:
+        # --- Voice or Solo mode: no Demucs needed ---
+        return _run_deep_no_demucs(data, audio_path, pipeline_config)
+
+    # --- Music or Mixed mode: Demucs separation ---
+    stems_dir = cache_dir / "stems"
+    import modules.stems as stems_mod
+
+    model = pipeline_config.get("demucs_model", "htdemucs_6s")
+    tracks = pipeline_config.get("tracks", ("vocals", "drums", "bass", "guitar", "piano", "other"))
+    print(f"Separating stems (Demucs {model}, {len(tracks)} tracks)...")
+    stems_mod.split(audio_path, stems_dir, model=model)
+
     print("Building stem timeline...")
     timeline, vocals_y, vocals_rms = stems_mod.build_timeline(stems_dir)
     data["stemTimeline"] = timeline
 
-    # Per-stem MIDI extraction (Ocean Listen's innovation)
-    import modules.per_stem_notes as psn
-    TRACKS = ("vocals", "drums", "bass", "guitar", "piano", "other")
-    print("Extracting per-stem MIDI notes...")
-    stem_notes, all_stem_notes = psn.analyze_all_stems(stems_dir, TRACKS)
-    data["stemNotes"] = {k: v for k, v in stem_notes.items()}
-    data["totalStemNotes"] = len(all_stem_notes)
+    # Per-stem MIDI extraction (only for configured tracks)
+    if pipeline_config["run_basic_pitch"]:
+        import modules.per_stem_notes as psn
+        print("Extracting per-stem MIDI notes...")
+        stem_notes, all_stem_notes = psn.analyze_all_stems(stems_dir, tracks)
+        data["stemNotes"] = {k: v for k, v in stem_notes.items()}
+        data["totalStemNotes"] = len(all_stem_notes)
 
-    # Vocal multi-part detection
-    if stem_notes.get("vocals"):
-        print("Detecting vocal parts...")
-        parts = psn.detect_vocal_parts(stem_notes["vocals"])
-        data["vocalParts"] = parts
+        if stem_notes.get("vocals"):
+            print("Detecting vocal parts...")
+            parts = psn.detect_vocal_parts(stem_notes["vocals"])
+            data["vocalParts"] = parts
 
-    # Unified timeline (what each instrument is doing per 10s window)
-    data["unifiedTimeline"] = psn.build_stem_timeline(stem_notes)
+        data["unifiedTimeline"] = psn.build_stem_timeline(stem_notes)
 
-    # Voice profile
-    if vocals_y is not None and timeline.get("vocals"):
+    # Voice profile + f0 (on separated vocals track)
+    if pipeline_config["run_voice_profile"] and vocals_y is not None and timeline.get("vocals"):
         import modules.voice as voice_mod
         print("Analyzing voice profile...")
         vp = voice_mod.profile(vocals_y, vocals_rms, timeline["vocals"], librosa, np)
         if vp:
             data["voiceProfile"] = vp
 
-        # f0 + vibrato
+    if pipeline_config["run_f0"] and vocals_y is not None:
         try:
+            import modules.voice as voice_mod
             print("Extracting f0 trajectory...")
             f0_data = voice_mod.f0_analysis(vocals_y, sr=22050)
+            data["vibrato"] = f0_data["vibrato"]
+            data["f0Data"] = {"times": f0_data["f0_times"], "values": f0_data["f0_values"]}
+        except Exception as e:
+            print(f"f0 analysis failed: {e}")
+
+    data["deepVersion"] = 1
+    return data
+
+
+def _run_deep_no_demucs(data, audio_path, pipeline_config):
+    """Deep analysis without Demucs: for voice and solo modes."""
+    import librosa
+    import numpy as np
+
+    y, sr = librosa.load(str(audio_path), sr=22050)
+    duration = librosa.get_duration(y=y, sr=sr)
+
+    # Use structure-level vocal segments for voice analysis
+    vocal_segments = data.get("vocalSegments", [])
+    if not vocal_segments:
+        # Treat entire audio as one segment
+        vocal_segments = [[0.0, round(duration, 1)]]
+
+    # Voice profile on original audio
+    if pipeline_config["run_voice_profile"]:
+        import modules.voice as voice_mod
+        rms = librosa.feature.rms(y=y, hop_length=512)[0]
+        print("Analyzing voice profile (original audio)...")
+        vp = voice_mod.profile(y, rms, vocal_segments, librosa, np)
+        if vp:
+            data["voiceProfile"] = vp
+
+    # f0 trajectory (intonation for speech, pitch for singing)
+    if pipeline_config["run_f0"]:
+        try:
+            import modules.voice as voice_mod
+            print("Extracting f0 trajectory...")
+            f0_data = voice_mod.f0_analysis(y, sr=22050)
             data["vibrato"] = f0_data["vibrato"]
             data["f0Data"] = {"times": f0_data["f0_times"], "values": f0_data["f0_values"]}
         except Exception as e:
@@ -286,11 +339,14 @@ def _build_aligned_timeline(notes, lyrics):
 def main():
     parser = argparse.ArgumentParser(
         description="Ocean Listen / 听海 — let your AI hear music",
-        usage="%(prog)s <audio> [--deep] [--lyric whisper|netease] [options]"
+        usage="%(prog)s <audio> [--deep] [--mode auto|music|solo|voice|mixed] [options]"
     )
     parser.add_argument("audio", help="path to audio file")
     parser.add_argument("--deep", action="store_true",
-                        help="deep listen: Demucs stem separation + voice profile + per-stem MIDI")
+                        help="deep listen: auto-classify and run appropriate pipeline")
+    parser.add_argument("--mode", default="auto",
+                        choices=["auto", "music", "solo", "voice", "mixed"],
+                        help="force analysis mode (default: auto-classify)")
     parser.add_argument("--lyric", nargs="?", const="whisper", default=None,
                         help="lyrics source: 'auto' (netease first→whisper fallback), "
                              "'whisper' (local), 'netease' (search/id/url)")
@@ -331,12 +387,33 @@ def main():
         lyric_mode = "netease"
         lyric_value = args.lyric_value or args.lyric
 
-    # Run analysis
+    # --- Shallow listen (always) ---
     data = run_shallow(audio_path, cache_dir, args.force)
 
-    if args.deep:
-        data = run_deep(data, str(audio_path), cache_dir, args.force)
+    # --- Classification ---
+    audio_type = args.mode
+    classification = None
+    if args.mode == "auto" or args.deep:
+        import modules.classifier as classifier_mod
+        print("\n=== Pre-classification ===")
+        classification = classifier_mod.classify(
+            data.get("instruments", {}),
+            data,
+        )
+        print(f"  Detected: {classification['type']} (confidence: {classification['confidence']})")
+        print(f"  {classification['reasoning']}")
+        data["classification"] = classification
+        if args.mode == "auto":
+            audio_type = classification["type"]
 
+    # --- Deep listen ---
+    if args.deep:
+        from modules.classifier import get_pipeline_config
+        pipeline_config = get_pipeline_config(audio_type)
+        pipeline_config["_type"] = audio_type
+        data = run_deep(data, str(audio_path), cache_dir, pipeline_config)
+
+    # --- Lyrics ---
     if lyric_mode:
         data = run_lyrics(data, str(audio_path), lyric_mode, lyric_value,
                           args.language, args.whisper_model)

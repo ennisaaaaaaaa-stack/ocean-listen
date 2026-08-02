@@ -155,6 +155,13 @@ def analyze(audio_path):
                        {"t": end, "label": "vocal out"}])
     events.sort(key=lambda e: e["t"])
 
+    # Percussion ratio: how much of the audio energy is percussive/transient
+    perc_ratio = float(np.mean(perc_rms) / (np.mean(rms) + 1e-10))
+
+    # Vocal coverage: fraction of duration with detected vocals
+    vocal_time = sum(e - s for s, e in vocal_segments)
+    vocal_coverage = vocal_time / duration if duration else 0.0
+
     return {
         "duration": round(duration, 1),
         "bpm": round(tempo),
@@ -164,6 +171,8 @@ def analyze(audio_path):
         "brightnessBySegment": brightness,
         "brightnessTrend": brightness_trend,
         "vocalSegments": vocal_segments,
+        "vocalCoverage": round(vocal_coverage, 3),
+        "percussiveRatio": round(perc_ratio, 3),
         "bandEntries": band_entries,
         "percussiveEntry": percussive_entry,
         "events": events,

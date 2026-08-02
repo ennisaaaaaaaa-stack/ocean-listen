@@ -199,3 +199,158 @@ def f0_analysis(vocals_y, sr=SR):
         "f0_times": times.tolist(),
         "vibrato": vibrato_info,
     }
+
+
+# ---------------------------------------------------------------------------
+# Voice segmentation: time-axis classification of voice texture
+# ---------------------------------------------------------------------------
+
+# Sliding window config
+_SEG_WIN_S = 2.0       # feature window
+_SEG_STEP_S = 0.5      # step between windows
+_SEG_SMOOTH = 3        # median filter kernel for type smoothing
+_SEG_MERGE_TOL = 2     # max consecutive different windows to bridge when merging
+_SEG_MIN_DUR_S = 0.8   # segments shorter than this get absorbed
+
+# Classification thresholds (calibrated on Whoregasm, 2026-08-02)
+_SILENCE_VR = 0.15     # voiced_ratio below this = silence
+_NONVOCAL_IQR = 150    # pitch IQR above this = non-vocal (BeyondWords threshold)
+_SUSTAINED_VR = 0.50   # voiced_ratio above this + low cv = sustained
+_SUSTAINED_CV = 0.08   # cv below this = stable pitch
+_MELODIC_CV = 0.10     # cv above this = pitch varies enough to be melodic
+_MELODIC_IQR = 40      # or IQR above this = melodic
+
+
+def _classify_window(med_f0, iqr, voiced_ratio, cv):
+    """Classify a single feature window."""
+    if voiced_ratio < _SILENCE_VR:
+        return "silence"
+    if iqr > _NONVOCAL_IQR:
+        return "non_vocal"
+    if voiced_ratio > _SUSTAINED_VR and cv < _SUSTAINED_CV:
+        return "sustained"
+    if cv > _MELODIC_CV or iqr > _MELODIC_IQR:
+        return "melodic"
+    return "speech"
+
+
+def segment_voice(f0_values, f0_times, sr=SR, hop=HOP):
+    """Segment voice into typed regions along the time axis.
+
+    Uses a sliding window over the f0 trajectory.  For each window it
+    computes four features (median f0, pitch IQR, voiced ratio, pitch CV)
+    then classifies the window.  Adjacent same-class windows are merged
+    with a tolerance for brief anomalies.
+
+    Types:
+        silence    -- no voice
+        sustained  -- dense voiced, stable pitch (held notes, rap)
+        melodic    -- pitch varies significantly (singing)
+        speech     -- sparse voiced, natural intonation
+        non_vocal  -- extreme pitch range (moans, slides, gasps)
+
+    Returns a list of segment dicts:
+        {type, start, end, duration, median_f0, pitch_iqr, voiced_ratio, pitch_cv}
+    """
+    f0 = np.array(f0_values, dtype=float)
+    times = np.array(f0_times)
+    voiced_mask = np.isfinite(f0) & (f0 > 0)
+
+    win_frames = int(_SEG_WIN_S * sr / hop)
+    step_frames = int(_SEG_STEP_S * sr / hop)
+
+    # --- feature extraction per window ---
+    feats = []  # (time, type, median_f0, iqr, voiced_ratio, cv)
+    for i in range(0, max(len(f0) - win_frames, 0), step_frames):
+        win = f0[i:i + win_frames]
+        mask = voiced_mask[i:i + win_frames]
+        voiced = win[mask]
+        vr = len(voiced) / len(win) if len(win) else 0
+        t = float(times[i]) if i < len(times) else 0.0
+
+        if len(voiced) < 3:
+            feats.append([t, "silence", 0, 0, vr, 0])
+            continue
+
+        med = float(np.median(voiced))
+        p25, p75 = np.percentile(voiced, [25, 75])
+        iqr = float(p75 - p25)
+        std = float(np.std(voiced))
+        cv = std / med if med > 0 else 0
+        tp = _classify_window(med, iqr, vr, cv)
+        feats.append([t, tp, round(med), round(iqr), round(vr, 2), round(cv, 3)])
+
+    if not feats:
+        return []
+
+    # --- type smoothing: remove single-window anomalies ---
+    types = [f[1] for f in feats]
+    k = _SEG_SMOOTH // 2
+    for i in range(len(types)):
+        lo = max(0, i - k)
+        hi = min(len(types), i + k + 1)
+        neighbours = types[lo:i] + types[i + 1:hi]
+        if neighbours and all(n == neighbours[0] for n in neighbours) and neighbours[0] != types[i]:
+            types[i] = neighbours[0]
+
+    # --- merge consecutive same-type windows (with tolerance) ---
+    segments = []
+    i = 0
+    while i < len(feats):
+        tp = types[i]
+        j = i
+        skip = 0
+        last_good = i
+        while j < len(feats):
+            if types[j] == tp:
+                last_good = j
+                skip = 0
+            else:
+                skip += 1
+                if skip > _SEG_MERGE_TOL:
+                    break
+            j += 1
+
+        start_t = feats[i][0]
+        if last_good + 1 < len(feats):
+            end_t = feats[last_good + 1][0]
+        else:
+            end_t = start_t + _SEG_WIN_S
+
+        # aggregate features of matching windows only
+        matched = [feats[k] for k in range(i, last_good + 1) if types[k] == tp]
+        f0_vals = [f[2] for f in matched if f[2] > 0]
+        med_f0 = int(np.median(f0_vals)) if f0_vals else 0
+        avg_iqr = int(np.median([f[3] for f in matched])) if matched else 0
+        avg_vr = round(float(np.median([f[4] for f in matched])), 2) if matched else 0
+        avg_cv = round(float(np.median([f[5] for f in matched])), 3) if matched else 0
+
+        segments.append({
+            "type": tp,
+            "start": round(start_t, 1),
+            "end": round(end_t, 1),
+            "duration": round(end_t - start_t, 1),
+            "median_f0": med_f0,
+            "pitch_iqr": avg_iqr,
+            "voiced_ratio": avg_vr,
+            "pitch_cv": avg_cv,
+        })
+        i = last_good + 1
+
+    # --- absorb sub-minimum segments into neighbours ---
+    merged = []
+    for seg in segments:
+        if seg["duration"] < _SEG_MIN_DUR_S and merged:
+            prev = merged[-1]
+            prev["end"] = seg["end"]
+            prev["duration"] = round(prev["end"] - prev["start"], 1)
+        else:
+            if merged and seg["type"] == merged[-1]["type"]:
+                # same type as previous after merge — combine
+                prev = merged[-1]
+                prev["end"] = seg["end"]
+                prev["duration"] = round(prev["end"] - prev["start"], 1)
+            else:
+                merged.append(seg)
+
+    return merged

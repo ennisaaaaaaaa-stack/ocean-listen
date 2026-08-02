@@ -45,6 +45,7 @@ def detect(audio_path):
 
     label_map = {label: i for i, label in enumerate(labels)}
     segments = {}
+    confidence = {}
 
     for group, group_labels in INSTRUMENT_GROUPS.items():
         indices = [label_map[l] for l in group_labels if l in label_map]
@@ -77,4 +78,21 @@ def detect(audio_path):
         if merged:
             segments[group] = [[round(s, 1), round(e, 1)] for s, e in merged]
 
-    return segments
+            # Confidence: average probability during active frames + coverage ratio
+            active_mask = np.zeros(len(curve), dtype=bool)
+            for s, e in merged:
+                sf = int(s * fps)
+                ef = min(int(e * fps), len(curve))
+                active_mask[sf:ef] = True
+            if np.any(active_mask):
+                avg_prob = float(np.mean(curve[active_mask]))
+                coverage = float(np.sum(active_mask) / len(curve))
+                confidence[group] = {
+                    "avg_prob": round(avg_prob, 3),
+                    "coverage": round(coverage, 3),
+                }
+
+    result = dict(segments)
+    if confidence:
+        result["_confidence"] = confidence
+    return result

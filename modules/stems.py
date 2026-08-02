@@ -9,7 +9,10 @@ import tempfile
 
 import numpy as np
 
-TRACKS = ("vocals", "drums", "bass", "guitar", "piano", "other")
+# Track names per Demucs model
+TRACKS_6S = ("vocals", "drums", "bass", "guitar", "piano", "other")
+TRACKS_4S = ("vocals", "drums", "bass", "other")
+
 SR = 22050
 HOP = 512
 STEM_SMOOTH_S = 0.3
@@ -18,19 +21,23 @@ STEM_MERGE_GAP_S = 2.5
 STEM_SIGNAL_FRACTION = 0.08  # fraction of (peak - noise_floor) above noise_floor
 
 
-def split(audio_path, destination):
-    """Run Demucs 6-source separation."""
-    if all((destination / f"{t}.mp3").exists() for t in TRACKS):
+def split(audio_path, destination, model="htdemucs_6s"):
+    """Run Demucs source separation.
+
+    model: 'htdemucs_6s' (6-source) or 'htdemucs'/'htdemucs_ft' (4-source).
+    """
+    tracks = TRACKS_6S if model == "htdemucs_6s" else TRACKS_4S
+    if all((destination / f"{t}.mp3").exists() for t in tracks):
         return
     destination.mkdir(parents=True, exist_ok=True)
     temp = pathlib.Path(tempfile.mkdtemp(prefix="stems-", dir=destination.parent))
     try:
         subprocess.run([
-            sys.executable, "-m", "demucs", "-n", "htdemucs_6s", "--mp3",
+            sys.executable, "-m", "demucs", "-n", model, "--mp3",
             "--mp3-bitrate", "128", "-j", "2", "-o", str(temp), str(audio_path),
         ], check=True, timeout=1800)
-        source = temp / "htdemucs_6s" / pathlib.Path(audio_path).stem
-        for track in TRACKS:
+        source = temp / model / pathlib.Path(audio_path).stem
+        for track in tracks:
             src = source / f"{track}.mp3"
             if not src.exists():
                 raise RuntimeError(f"Demucs output missing {track}.mp3")
@@ -69,13 +76,19 @@ def _active_segments(rms, np_mod):
 
 
 def build_timeline(stems_dir):
-    """Build per-track active/inactive timeline from separated stems."""
+    """Build per-track active/inactive timeline from separated stems.
+    Auto-detects available track files."""
     import librosa
     timeline = {}
     vocals_y = None
     vocals_rms = None
 
-    for track in TRACKS:
+    # Auto-detect tracks by looking for .mp3 files
+    tracks = sorted(set(f.stem for f in stems_dir.glob("*.mp3")))
+    if not tracks:
+        tracks = list(TRACKS_6S)  # fallback
+
+    for track in tracks:
         track_path = stems_dir / f"{track}.mp3"
         if not track_path.exists():
             timeline[track] = []
