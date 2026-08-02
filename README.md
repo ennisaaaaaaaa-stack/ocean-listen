@@ -58,10 +58,28 @@ You can also force a mode: `--mode music`, `--mode voice`, etc.
   - `speech` — flat pitch, medium density (talking)
   - `non_vocal` — extreme pitch jumps (iqr > 150Hz, indicating non-standard vocal sounds)
   - Uses adaptive boundaries (2s window, 0.5s step) with type smoothing and segment merging
+- **Voice timbre analysis** — 8-feature spectral and voice-quality fingerprint using parselmouth (Praat):
+  - Spectral shape: centroid, rolloff, flatness (librosa)
+  - Formants: F1, F2, F3 (vocal tract resonance)
+  - Voice quality: jitter, shimmer, HNR (harmonics-to-noise ratio)
+  - 4 label axes, each 4 levels:
+    - Brightness: warm → neutral → bright → piercing
+    - Cleanness: clean → natural → raspy → rough
+    - Openness: closed → relaxed → open → wide
+    - Stability: stable → slight → unstable
+  - Output: `warm / clean / closed / stable` style descriptor string
+  - Thresholds calibrated on 8 samples across controlled experiments (same voice: relaxed vs loud, low vs high octave)
+- **Speech analysis** — patterns and dynamics of voiced content:
+  - Speech rate: pseudo-syllable count per minute (from voiced burst detection)
+  - Pause pattern: count, ratio, mean duration (continuous / natural pauses / frequent pauses)
+  - Intonation: f0 range in semitones, variability (flat → monotone → varied → expressive)
+  - Energy: RMS dynamic range in dB
+  - Rhythm: voiced segment duration regularity (regular / irregular)
 
-### Lyrics (optional, dual source)
+### Lyrics (optional, triple source)
 
 - Whisper local transcription (offline, faster-whisper, multi-language)
+- SenseVoice transcription (Alibaba FunASR, optimized for Chinese, with emotion detection)
 - NetEase Cloud Music API (accurate timed lyrics, with duration guard)
 - Local .lrc / .txt files
 - Timeline alignment (lyrics + notes + instruments)
@@ -93,7 +111,7 @@ For deep listen:
 pip install -r requirements-deep.txt
 ```
 
-First deep listen auto-downloads models (~330MB PANNs + ~80MB Demucs).
+First deep listen auto-downloads models (~330MB PANNs + ~80MB Demucs + ~900MB SenseVoice).
 
 ## Usage
 
@@ -110,6 +128,9 @@ python ocean.py song.mp3 --deep
 
 # Lyrics via whisper (local)
 python ocean.py recording.m4a --lyric whisper --language en
+
+# Lyrics via SenseVoice (Chinese, with emotion detection)
+python ocean.py recording.m4a --lyric sensevoice --language zh
 
 # Lyrics via NetEase
 python ocean.py song.mp3 --lyric netease --lyric-value "Shy Smith Soaked"
