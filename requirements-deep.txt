@@ -1,5 +1,8 @@
 # Ocean Listen / 听海 — deep listen dependencies (install on top of requirements.txt)
 -r requirements.txt
 torch
+torchaudio
 demucs
 panns-inference
+praat-parselmouth
+funasr

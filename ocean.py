@@ -258,6 +258,11 @@ def run_lyrics(data, audio_path, mode, value, language="auto", whisper_model="sm
         import modules.lyrics_whisper as lw
         result = lw.transcribe(str(audio_path), model_size=whisper_model, language=language)
         data["lyrics"] = result
+    elif mode == "sensevoice":
+        print("\n=== Lyrics (SenseVoice) ===")
+        import modules.lyrics_sensevoice as ls
+        result = ls.transcribe(str(audio_path), language=language)
+        data["lyrics"] = result
     elif mode == "netease":
         print("\n=== Lyrics (NetEase) ===")
         _attach_netease(data, audio_path, value, fallback_whisper=True,
@@ -414,7 +419,8 @@ def main():
                         help="force analysis mode (default: auto-classify)")
     parser.add_argument("--lyric", nargs="?", const="whisper", default=None,
                         help="lyrics source: 'auto' (netease first→whisper fallback), "
-                             "'whisper' (local), 'netease' (search/id/url)")
+                             "'whisper' (local), 'sensevoice' (Alibaba, Chinese+emotion), "
+                             "'netease' (search/id/url)")
     parser.add_argument("--lyric-value", default=None,
                         help="search term for auto/netease: song ID, URL, or 'song artist' "
                              "(auto-mode defaults to filename)")
@@ -448,7 +454,9 @@ def main():
         lyric_value = args.lyric_value
     elif args.lyric == "whisper":
         lyric_mode = "whisper"
-    elif args.lyric == "netease" or (args.lyric and args.lyric not in ("whisper", "auto")):
+    elif args.lyric == "sensevoice":
+        lyric_mode = "sensevoice"
+    elif args.lyric == "netease" or (args.lyric and args.lyric not in ("whisper", "auto", "sensevoice")):
         lyric_mode = "netease"
         lyric_value = args.lyric_value or args.lyric
 
