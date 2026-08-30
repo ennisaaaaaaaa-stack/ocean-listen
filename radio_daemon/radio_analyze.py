@@ -115,7 +115,7 @@ def dup_check(data: dict, path: pathlib.Path, no_db: bool = False) -> bool:
     conn = sqlite3.connect(DB_PATH)
     rows = conn.execute(
         "SELECT id, name, bpm, key_name, total_notes FROM songs "
-        "WHERE name LIKE 'radio-%' AND imported_at > datetime('now', '-7 days')",
+        "WHERE name LIKE 'radio-%' AND created_at > datetime('now', '-7 days')",
     ).fetchall()
     conn.close()
     if not rows:
