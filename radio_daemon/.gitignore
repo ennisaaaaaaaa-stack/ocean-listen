@@ -1,0 +1,6 @@
+# 电台 daemon 运行产物——不进仓库
+radio_raw/
+radio_done/
+radio_reports/
+ocean_cache_radio/
+tmp/

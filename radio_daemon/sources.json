@@ -1,0 +1,4 @@
+[
+  {"name": "dronezone", "url": "https://ice1.somafm.com/dronezone-128-mp3", "type": "music", "pipeline": "solo"},
+  {"name": "groovesalad", "url": "https://ice1.somafm.com/groovesalad-128-mp3", "type": "music", "pipeline": "solo"}
+]

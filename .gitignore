@@ -10,3 +10,4 @@ __pycache__/
 install.log
 requirements_fix.txt
 # keep json outputs — they're small and useful
+ocean_music_box.db
