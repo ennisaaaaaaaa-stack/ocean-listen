@@ -35,7 +35,7 @@ def main():
         conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
         rows = conn.execute(
             "SELECT name, bpm, key_name, duration FROM songs "
-            "WHERE name LIKE 'radio-%' AND date(imported_at) = ?",
+            "WHERE name LIKE 'radio-%' AND date(created_at) = ?",
             (str(yesterday),),
         ).fetchall()
         conn.close()
